@@ -386,6 +386,7 @@ function App() {
           {loadedCount > 0 && <span style={{color:'var(--green)',marginLeft:4}}>&middot; {loadedCount} loaded</span>}
           &nbsp;&middot;&nbsp;{dateStr()}
           {sid && <span style={{fontSize:10,color:'var(--text-t)',marginLeft:8}}>#{sid.slice(0,8)}</span>}
+          <span style={{fontSize:10,color:'var(--green)',marginLeft:8}}>&#x25cf; auto-saved</span>
         </span>
       </div>
 
@@ -693,12 +694,22 @@ function App() {
                 style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
                   border: isCur ? '1.5px solid var(--green)' : '0.5px solid var(--border)',
                   padding:'12px 14px',marginBottom:8}}>
-                <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)',marginBottom:2}}>
-                  {sess.name}
-                  {isCur && <span style={{fontSize:11,marginLeft:8,color:'var(--green)',fontWeight:400}}>&bull; live</span>}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:2}}>
+                  <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>
+                    {sess.name}
+                    {isCur && <span style={{fontSize:11,marginLeft:8,color:'var(--green)',fontWeight:400}}>&bull; live</span>}
+                  </div>
+                  {isCur && lots.length > 0 && (
+                    <span style={{fontSize:13,fontWeight:500,color:'var(--green)',flexShrink:0,marginLeft:8}}>
+                      {fmt(runTotal)}
+                    </span>
+                  )}
                 </div>
                 <div style={{fontSize:12,color:'var(--text-s)',marginBottom:10}}>
                   {new Date(sess.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                  {isCur && lots.length > 0 && (
+                    <span style={{marginLeft:8}}>{lots.length} lot{lots.length!==1?'s':''}</span>
+                  )}
                 </div>
                 <div style={{display:'flex',gap:14,paddingTop:10,borderTop:'0.5px solid var(--border)',alignItems:'center',flexWrap:'wrap'}}>
                   {delSess === sess.id ? (
@@ -718,6 +729,13 @@ function App() {
                     </>
                   ) : (
                     <>
+                      {isCur && (
+                        <button onClick={function(){ setTab('add'); }}
+                          style={{fontSize:13,fontWeight:500,padding:'6px 14px',borderRadius:'var(--r-md)',
+                            border:'none',background:'var(--green)',color:'#fff',cursor:'pointer'}}>
+                          + Add Lots
+                        </button>
+                      )}
                       {!isCur && (
                         <button onClick={function(){ loadSession(sess); }}
                           style={{fontSize:13,color:'#185FA5',background:'none',border:'none',cursor:'pointer',padding:0}}>
@@ -744,7 +762,14 @@ function App() {
       {/* ── TAB: REPORTS ── */}
       {tab === 'reports' && (
         <div style={{padding:'12px 16px'}}>
-          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Purchase Report</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)'}}>Purchase Report</div>
+            <button onClick={function(){ setTab('add'); }}
+              style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--r-md)',
+                border:'none',background:'var(--green)',color:'#fff',cursor:'pointer',fontWeight:500}}>
+              + Add Lots
+            </button>
+          </div>
           <div style={{fontSize:12,color:'var(--text-s)',marginBottom:14}}>
             {sname} &middot; {lots.length} lots &middot; {fmt(runTotal)}
           </div>

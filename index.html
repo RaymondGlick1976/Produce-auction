@@ -4,63 +4,48 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#1D9E75">
   <title>Produce Auction Tracker</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: #f5f5f3; color: #1a1a18; -webkit-text-size-adjust: 100%;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f5f5f3;color:#1a1a18;-webkit-text-size-adjust:100%}
+    :root{
+      --bg-p:#fff;--bg-s:#f5f5f3;--bg-t:#ebebea;
+      --text-p:#1a1a18;--text-s:#5a5a54;--text-t:#999994;
+      --border:rgba(0,0,0,.12);--border-md:rgba(0,0,0,.25);
+      --r-md:8px;--r-lg:12px;
+      --green:#1D9E75;--green-l:#E1F5EE;--green-d:#085041;--green-b:#5DCAA5
     }
-    :root {
-      --bg-p:#ffffff; --bg-s:#f5f5f3; --bg-t:#ebebea;
-      --text-p:#1a1a18; --text-s:#5a5a54; --text-t:#999994;
-      --border:rgba(0,0,0,0.12); --border-md:rgba(0,0,0,0.25);
-      --r-md:8px; --r-lg:12px;
-      --green:#1D9E75; --green-l:#E1F5EE; --green-d:#085041; --green-b:#5DCAA5;
-    }
-    @media (prefers-color-scheme: dark) {
-      body { background:#1a1a18; color:#f0f0ee; }
-      :root {
-        --bg-p:#252523; --bg-s:#1a1a18; --bg-t:#2e2e2c;
-        --text-p:#f0f0ee; --text-s:#9a9a94; --text-t:#666660;
-        --border:rgba(255,255,255,0.10); --border-md:rgba(255,255,255,0.22);
-        --green-l:#0a2e22; --green-d:#9FE1CB; --green-b:#1D9E75;
+    @media(prefers-color-scheme:dark){
+      body{background:#1a1a18;color:#f0f0ee}
+      :root{
+        --bg-p:#252523;--bg-s:#1a1a18;--bg-t:#2e2e2c;
+        --text-p:#f0f0ee;--text-s:#9a9a94;--text-t:#666660;
+        --border:rgba(255,255,255,.10);--border-md:rgba(255,255,255,.22);
+        --green-l:#0a2e22;--green-d:#9FE1CB;--green-b:#1D9E75
       }
     }
-    #root { max-width:500px; margin:0 auto; }
-    #app-loading {
-      display:flex; flex-direction:column; align-items:center;
-      justify-content:center; height:100vh; gap:14px; color:#999; font-size:14px;
-    }
-    .spin {
-      width:28px; height:28px; border-radius:50%;
-      border:2.5px solid #ddd; border-top-color:#1D9E75;
-      animation:spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform:rotate(360deg); } }
-    input, select, button { font-family:inherit; }
+    #root{max-width:500px;margin:0 auto}
+    #loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;color:#999;font-size:14px}
+    .spin{width:28px;height:28px;border-radius:50%;border:2.5px solid #ddd;border-top-color:#1D9E75;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    input,select,button,textarea{font-family:inherit}
     input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
-    input[type=number] { -moz-appearance:textfield; }
-    @media print {
-      .no-print { display:none !important; }
-      .print-show { display:block !important; }
-      body { background:white !important; color:black !important; }
-      #root { max-width:100% !important; }
-      .lot-card { break-inside:avoid; border:1px solid #ccc !important; margin-bottom:8pt !important; }
+    input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+    input[type=number]{-moz-appearance:textfield}
+    @media print{
+      .np{display:none!important}
+      .po{display:block!important}
+      body{background:#fff!important;color:#000!important}
+      #root{max-width:100%!important}
+      .lc{break-inside:avoid;border:1px solid #ccc!important;margin-bottom:8pt!important}
     }
-    .print-show { display:none; }
+    .po{display:none}
   </style>
 </head>
 <body>
-
-<div id="app-loading">
-  <div class="spin"></div>
-  <span>Connecting to auction…</span>
-</div>
+<div id="loading"><div class="spin"></div><span>Connecting to auction…</span></div>
 <div id="root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -71,538 +56,525 @@
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
 
-/* ── Supabase client ─────────────────────────────────────── */
-const SUPA_URL = 'https://lzcymngivtkzcazvuirq.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6Y3ltbmdpdnRremNhenZ1aXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MDMyNTcsImV4cCI6MjA5MjQ3OTI1N30.Yyz5b3Zc3fnOa4QqlrsrJr_BYPAvmrCiHYmG2n3yv4c';
-const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+const SB_URL = 'https://lzcymngivtkzcazvuirq.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6Y3ltbmdpdnRremNhenZ1aXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MDMyNTcsImV4cCI6MjA5MjQ3OTI1N30.Yyz5b3Zc3fnOa4QqlrsrJr_BYPAvmrCiHYmG2n3yv4c';
+const sb = supabase.createClient(SB_URL, SB_KEY);
 
-/* ── Constants ───────────────────────────────────────────── */
-const UNITS = [
-  '25 lb. box','40 lb. box','50 lb. bag','bu. crate','bunch',
-  'flat','half-box','lug','peck','pint flat','quart flat',
-  'bag','crate','sack','barrel','carton','hamper','wirebound crate'
-];
+const UNITS = ['25 lb. box','40 lb. box','50 lb. bag','bu. crate','bunch','flat','half-box',
+  'lug','peck','pint flat','quart flat','bag','crate','sack','barrel','carton','hamper','wirebound crate'];
 const GRADES = ['No. 1','No. 2','No. 3','Canners'];
 const COLORS = ['N/A','Green','Yellow','Red','Mixed'];
-const COLOR_DOT = { Green:'#1D9E75', Yellow:'#EF9F27', Red:'#E24B4A', Mixed:'#888780' };
+const CDOT = { Green:'#1D9E75', Yellow:'#EF9F27', Red:'#E24B4A', Mixed:'#888780' };
 const GS = {
-  'No. 1':  {bg:'#E1F5EE', color:'#085041', border:'#5DCAA5'},
-  'No. 2':  {bg:'#E6F1FB', color:'#0C447C', border:'#85B7EB'},
-  'No. 3':  {bg:'#EEEDFE', color:'#26215C', border:'#AFA9EC'},
-  'Canners':{bg:'#FAEEDA', color:'#633806', border:'#EF9F27'},
+  'No. 1':  { bg:'#E1F5EE', fg:'#085041', br:'#5DCAA5' },
+  'No. 2':  { bg:'#E6F1FB', fg:'#0C447C', br:'#85B7EB' },
+  'No. 3':  { bg:'#EEEDFE', fg:'#26215C', br:'#AFA9EC' },
+  'Canners':{ bg:'#FAEEDA', fg:'#633806', br:'#EF9F27' },
 };
 
-const fmt     = v => '$'+(parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-const nowDate = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-const nowShort= () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
-const BLANK   = {item:'',unit:'25 lb. box',grade:'No. 1',color:'N/A',grower:'',qty:'',price:'',total:'',description:'',is_loaded:false};
+const fmt      = v => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+const dateStr  = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+const shortStr = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', color:'N/A', grower:'', qty:'', price:'', total:'', description:'', is_loaded:false };
 
-const getHashSid = () => { const m=location.hash.match(/#s=([a-f0-9-]{36})/); return m?m[1]:null; };
-const setHashSid = id => history.replaceState(null,'','#s='+id);
-const sessionUrl = id => location.href.split('#')[0]+'#s='+id;
+const getSid   = () => { const m = location.hash.match(/#s=([a-f0-9-]{36})/); return m ? m[1] : null; };
+const setSid   = id => history.replaceState(null, '', '#s=' + id);
+const shareUrl = id => location.href.split('#')[0] + '#s=' + id;
 
-/* ════════════════════════════════════════════════════════════
-   APP
-════════════════════════════════════════════════════════════ */
-function ProduceTracker() {
-  const [tab,        setTab]        = useState('add');
-  const [sessionId,  setSid]        = useState(null);
-  const [sessName,   setSessName]   = useState('Auction — '+nowShort());
-  const [sessions,   setSessions]   = useState([]);
-  const [lots,       setLots]       = useState([]);
-  const [db,         setDb]         = useState([]);
-  const [form,       setForm]       = useState({...BLANK});
-  const [formOpen,      setFormOpen]      = useState(true);
-  const [sugg,          setSugg]          = useState([]);
-  const [editId,        setEditId]        = useState(null);
-  const [confirmDelete,        setConfirmDelete]        = useState(null);
-  const [confirmDeleteSession, setConfirmDeleteSession] = useState(null);
-  const [toast,         setToast]         = useState('');
-  const [toastErr,      setToastErr]      = useState(false);
-  const [editName,      setEditName]      = useState(false);
-  const [newItem,       setNewItem]       = useState('');
-  const [customUnit,    setCustomUnit]    = useState('');
-  const itemRef    = useRef(null);
-  const nameRef    = useRef(null);
-  const channelRef = useRef(null);
+function App() {
+  const [tab,       setTab]    = useState('add');
+  const [sid,       _setSid]   = useState(null);
+  const [sname,     setSname]  = useState('Auction \u2014 ' + shortStr());
+  const [sessions,  setSess]   = useState([]);
+  const [lots,      setLots]   = useState([]);
+  const [pdb,       setPdb]    = useState([]);
+  const [form,      setForm]   = useState({...BLANK});
+  const [formOpen,  setFO]     = useState(true);
+  const [sugg,      setSugg]   = useState([]);
+  const [editId,    setEid]    = useState(null);
+  const [delLot,    setDelLot] = useState(null);
+  const [delSess,   setDelSess]= useState(null);
+  const [toast,     setToast]  = useState('');
+  const [toastErr,  setTE]     = useState(false);
+  const [editName,  setEN]     = useState(false);
+  const [newProd,   setNP]     = useState('');
+  const [custUnit,  setCU]     = useState('');
+  const itemRef = useRef(null);
+  const nameRef = useRef(null);
+  const chanRef = useRef(null);
 
-  const notify = (msg, err=false) => {
-    setToast(msg); setToastErr(err);
-    setTimeout(()=>setToast(''), 2500);
+  const notify = (msg, err) => {
+    setToast(msg); setTE(!!err);
+    setTimeout(() => setToast(''), 2500);
   };
 
-  /* ── Init ── */
+  const setSidBoth = id => { _setSid(id); setSid(id); };
+
   useEffect(() => {
-    (async () => {
-      const {data:dbRows} = await sb.from('produce_db').select('name').order('name');
-      if (dbRows) setDb(dbRows.map(r=>r.name));
+    var init = async function() {
+      var r1 = await sb.from('produce_db').select('name').order('name');
+      if (r1.data) setPdb(r1.data.map(function(x){ return x.name; }));
 
-      let sid = getHashSid();
-      if (sid) {
-        const {data:sess} = await sb.from('auction_sessions').select('*').eq('id',sid).single();
-        if (sess) {
-          setSid(sid); setSessName(sess.name);
-          const {data:ls} = await sb.from('lots').select('*').eq('session_id',sid).order('created_at');
-          if (ls) setLots(ls);
-        } else { sid = await makeSession(); }
-      } else { sid = await makeSession(); }
-
-      await loadSessions();
-      subscribe(sid);
-      document.getElementById('app-loading').style.display = 'none';
-    })();
-    return () => channelRef.current && channelRef.current.unsubscribe();
+      var id = getSid();
+      if (id) {
+        var r2 = await sb.from('auction_sessions').select('*').eq('id', id).single();
+        if (r2.data) {
+          _setSid(id); setSname(r2.data.name);
+          var r3 = await sb.from('lots').select('*').eq('session_id', id).order('created_at');
+          if (r3.data) setLots(r3.data);
+        } else {
+          id = await newSess(null, true);
+        }
+      } else {
+        id = await newSess(null, true);
+      }
+      await refreshSess();
+      subscribe(id);
+      document.getElementById('loading').style.display = 'none';
+    };
+    init();
+    return function() { if (chanRef.current) chanRef.current.unsubscribe(); };
   }, []);
 
-  const makeSession = async (name) => {
-    const n = name || 'Auction — '+nowShort();
-    const {data} = await sb.from('auction_sessions').insert({name:n}).select().single();
-    if (data) { setSid(data.id); setSessName(data.name); setHashSid(data.id); return data.id; }
+  var newSess = async function(name, skipNotify) {
+    var n = name || ('Auction \u2014 ' + shortStr());
+    var r = await sb.from('auction_sessions').insert({ name: n }).select().single();
+    if (r.data) { _setSid(r.data.id); setSname(r.data.name); setSid(r.data.id); return r.data.id; }
     return null;
   };
 
-  const loadSessions = async () => {
-    const {data} = await sb.from('auction_sessions').select('*').order('created_at',{ascending:false});
-    if (data) setSessions(data);
+  var refreshSess = async function() {
+    var r = await sb.from('auction_sessions').select('*').order('created_at', { ascending: false });
+    if (r.data) setSess(r.data);
   };
 
-  /* ── Realtime ── */
-  const subscribe = (sid) => {
-    if (!sid) return;
-    if (channelRef.current) channelRef.current.unsubscribe();
-    channelRef.current = sb.channel('lots-'+sid)
-      .on('postgres_changes',
-        {event:'*', schema:'public', table:'lots', filter:'session_id=eq.'+sid},
-        p => {
-          if (p.eventType==='INSERT')
-            setLots(ls => ls.some(l=>l.id===p.new.id) ? ls : [...ls, p.new]);
-          if (p.eventType==='UPDATE')
-            setLots(ls => ls.map(l=>l.id===p.new.id ? p.new : l));
-          if (p.eventType==='DELETE')
-            setLots(ls => ls.filter(l=>l.id!==p.old.id));
+  var subscribe = function(id) {
+    if (!id) return;
+    if (chanRef.current) chanRef.current.unsubscribe();
+    chanRef.current = sb.channel('lots-' + id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lots', filter: 'session_id=eq.' + id },
+        function(p) {
+          if (p.eventType === 'INSERT') setLots(function(ls){ return ls.some(function(l){ return l.id===p.new.id; }) ? ls : ls.concat([p.new]); });
+          if (p.eventType === 'UPDATE') setLots(function(ls){ return ls.map(function(l){ return l.id===p.new.id ? p.new : l; }); });
+          if (p.eventType === 'DELETE') setLots(function(ls){ return ls.filter(function(l){ return l.id!==p.old.id; }); });
         })
       .subscribe();
   };
 
-  /* ── Session name ── */
-  const commitName = async (name) => {
-    setEditName(false); setSessName(name);
-    if (sessionId) {
-      await sb.from('auction_sessions').update({name}).eq('id',sessionId);
-      setSessions(ss=>ss.map(s=>s.id===sessionId?{...s,name}:s));
+  var commitName = async function(name) {
+    setEN(false); setSname(name);
+    if (sid) {
+      await sb.from('auction_sessions').update({ name: name }).eq('id', sid);
+      setSess(function(ss){ return ss.map(function(s){ return s.id===sid ? Object.assign({}, s, {name:name}) : s; }); });
     }
   };
 
-  /* ── Autocomplete ── */
-  const onItemInput = v => {
-    setForm(f=>({...f,item:v}));
-    setSugg(v.length ? db.filter(p=>p.toLowerCase().includes(v.toLowerCase())).slice(0,8) : []);
+  var onItem = function(v) {
+    setForm(function(f){ return Object.assign({}, f, {item:v}); });
+    setSugg(v.length ? pdb.filter(function(p){ return p.toLowerCase().includes(v.toLowerCase()); }).slice(0,8) : []);
   };
-  const pickSugg = s => { setForm(f=>({...f,item:s})); setSugg([]); };
+  var pickSugg = function(s) { setForm(function(f){ return Object.assign({}, f, {item:s}); }); setSugg([]); };
 
-  /* ── Calculated fields ── */
-  const onPrice = v => {
-    const p=parseFloat(v),q=parseFloat(form.qty);
-    setForm(f=>({...f,price:v,total:(!isNaN(p)&&!isNaN(q))?(p*q).toFixed(2):f.total}));
+  var onPrice = function(v) {
+    var p=parseFloat(v), q=parseFloat(form.qty);
+    setForm(function(f){ return Object.assign({}, f, {price:v, total:(!isNaN(p)&&!isNaN(q))?(p*q).toFixed(2):f.total}); });
   };
-  const onQty = v => {
-    const p=parseFloat(form.price),q=parseFloat(v);
-    setForm(f=>({...f,qty:v,total:(!isNaN(p)&&!isNaN(q))?(p*q).toFixed(2):f.total}));
+  var onQty = function(v) {
+    var p=parseFloat(form.price), q=parseFloat(v);
+    setForm(function(f){ return Object.assign({}, f, {qty:v, total:(!isNaN(p)&&!isNaN(q))?(p*q).toFixed(2):f.total}); });
   };
-  const onTotal = v => {
-    const q=parseFloat(form.qty),t=parseFloat(v);
-    setForm(f=>({...f,total:v,price:(!isNaN(q)&&q>0&&!isNaN(t))?(t/q).toFixed(2):f.price}));
+  var onTotal = function(v) {
+    var q=parseFloat(form.qty), t=parseFloat(v);
+    setForm(function(f){ return Object.assign({}, f, {total:v, price:(!isNaN(q)&&q>0&&!isNaN(t))?(t/q).toFixed(2):f.price}); });
   };
 
-  /* ── Save lot ── */
-  const saveLot = async () => {
-    if (!form.item.trim()) { itemRef.current&&itemRef.current.focus(); return; }
-    const unitVal = form.unit==='__custom__' ? (customUnit.trim()||'custom') : form.unit;
-
-    if (!db.some(p=>p.toLowerCase()===form.item.trim().toLowerCase())) {
-      const n=form.item.trim();
-      await sb.from('produce_db').insert({name:n});
-      setDb(d=>[...d,n].sort((a,b)=>a.localeCompare(b)));
+  var saveLot = async function() {
+    if (!form.item.trim()) { if(itemRef.current) itemRef.current.focus(); return; }
+    var unit = form.unit === '__custom__' ? (custUnit.trim()||'custom') : form.unit;
+    if (!pdb.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
+      var nm = form.item.trim();
+      await sb.from('produce_db').insert({ name: nm });
+      setPdb(function(d){ return d.concat([nm]).sort(function(a,b){ return a.localeCompare(b); }); });
     }
-
-    const payload = {
-      session_id:sessionId, item:form.item.trim(), unit:unitVal,
-      grade:form.grade, color:form.color, grower:form.grower.trim(),
-      qty:form.qty, price:form.price, total:form.total||'0',
-      description:form.description.trim(), is_loaded:false,
+    var payload = {
+      session_id: sid, item: form.item.trim(), unit: unit,
+      grade: form.grade, color: form.color, grower: form.grower.trim(),
+      qty: form.qty, price: form.price, total: form.total||'0',
+      description: form.description.trim(), is_loaded: false
     };
-
     if (editId) {
-      const {data,error} = await sb.from('lots').update(payload).eq('id',editId).select().single();
-      if (error) { notify('Save failed — check connection',true); return; }
-      setLots(ls=>ls.map(l=>l.id===editId?data:l));
-      setEditId(null); notify('Lot updated');
+      var r1 = await sb.from('lots').update(payload).eq('id', editId).select().single();
+      if (r1.error) { notify('Save failed', true); return; }
+      setLots(function(ls){ return ls.map(function(l){ return l.id===editId ? r1.data : l; }); });
+      setEid(null); notify('Lot updated');
     } else {
-      const {data,error} = await sb.from('lots').insert(payload).select().single();
-      if (error) { notify('Save failed — check connection',true); return; }
-      setLots(ls=>ls.some(l=>l.id===data.id)?ls:[...ls,data]);
-      notify('Saved ✓');
+      var r2 = await sb.from('lots').insert(payload).select().single();
+      if (r2.error) { notify('Save failed', true); return; }
+      setLots(function(ls){ return ls.some(function(l){ return l.id===r2.data.id; }) ? ls : ls.concat([r2.data]); });
+      notify('Saved \u2713');
     }
-
-    setForm(f=>({...BLANK,unit:f.unit,grade:f.grade,color:f.color,grower:f.grower}));
-    setCustomUnit(''); setSugg([]);
-    setTimeout(()=>itemRef.current&&itemRef.current.focus(),80);
+    setForm(function(f){ return Object.assign({}, BLANK, {unit:f.unit, grade:f.grade, color:f.color, grower:f.grower}); });
+    setCU(''); setSugg([]);
+    setTimeout(function(){ if(itemRef.current) itemRef.current.focus(); }, 80);
   };
 
-  const startEdit = lot => {
-    const isCustom = !UNITS.includes(lot.unit);
-    setForm({item:lot.item,unit:isCustom?'__custom__':lot.unit,grade:lot.grade,
-      color:lot.color||'N/A',grower:lot.grower,qty:lot.qty,price:lot.price,total:lot.total,
-      description:lot.description||''});
-    if (isCustom) setCustomUnit(lot.unit);
-    setEditId(lot.id); setTab('add'); setFormOpen(true);
-    setTimeout(()=>itemRef.current&&itemRef.current.focus(),80);
+  var startEdit = function(lot) {
+    var isC = !UNITS.includes(lot.unit);
+    setForm({ item:lot.item, unit:isC?'__custom__':lot.unit, grade:lot.grade,
+      color:lot.color||'N/A', grower:lot.grower||'', qty:lot.qty||'',
+      price:lot.price||'', total:lot.total||'', description:lot.description||'', is_loaded:false });
+    if (isC) setCU(lot.unit);
+    setEid(lot.id); setTab('add'); setFO(true);
+    setTimeout(function(){ if(itemRef.current) itemRef.current.focus(); }, 80);
   };
 
-  const deleteLot = async id => {
-    setLots(ls=>ls.filter(l=>l.id!==id));
-    setConfirmDelete(null);
-    await sb.from('lots').delete().eq('id',id);
+  var doDelLot = async function(id) {
+    setLots(function(ls){ return ls.filter(function(l){ return l.id!==id; }); });
+    setDelLot(null);
+    await sb.from('lots').delete().eq('id', id);
   };
 
-  const toggleLoaded = async id => {
-    const lot = lots.find(l=>l.id===id);
+  var toggleLoaded = async function(id) {
+    var lot = lots.find(function(l){ return l.id===id; });
     if (!lot) return;
-    const val = !lot.is_loaded;
-    setLots(ls=>ls.map(l=>l.id===id ? {...l,is_loaded:val} : l));
-    await sb.from('lots').update({is_loaded:val}).eq('id',id);
+    var val = !lot.is_loaded;
+    setLots(function(ls){ return ls.map(function(l){ return l.id===id ? Object.assign({},l,{is_loaded:val}) : l; }); });
+    await sb.from('lots').update({ is_loaded: val }).eq('id', id);
   };
 
-  const runTotal    = lots.reduce((s,l)=>s+parseFloat(l.total||0),0);
-  const loadedCount = lots.filter(l=>l.is_loaded).length;
-
-  /* ── Report data ── */
-  const reportItems = useMemo(() => {
-    const map = {};
-    lots.forEach(lot => {
-      const key = lot.item.trim().toLowerCase();
-      if (!map[key]) map[key] = {name:lot.item.trim(), totalCost:0, lotCount:0, units:{}};
-      map[key].totalCost += parseFloat(lot.total)||0;
-      map[key].lotCount++;
-      const u = lot.unit||'unit';
-      if (!map[key].units[u]) map[key].units[u] = {qty:0, cost:0, lots:0};
-      map[key].units[u].qty  += parseFloat(lot.qty)||0;
-      map[key].units[u].cost += parseFloat(lot.total)||0;
-      map[key].units[u].lots++;
-    });
-    return Object.values(map).sort((a,b)=>b.totalCost-a.totalCost);
-  }, [lots]);
-
-  /* ── Session management ── */
-  const newSession = async () => {
-    if (channelRef.current) channelRef.current.unsubscribe();
-    setLots([]); setForm({...BLANK}); setEditId(null);
-    const sid = await makeSession();
-    subscribe(sid); await loadSessions();
+  var startNewSession = async function() {
+    if (chanRef.current) chanRef.current.unsubscribe();
+    setLots([]); setForm({...BLANK}); setEid(null);
+    var id = await newSess(null, false);
+    subscribe(id); await refreshSess();
     setTab('add'); notify('New session started');
   };
 
-  const loadSession = async sess => {
-    if (channelRef.current) channelRef.current.unsubscribe();
-    setSid(sess.id); setSessName(sess.name); setHashSid(sess.id);
-    const {data} = await sb.from('lots').select('*').eq('session_id',sess.id).order('created_at');
-    if (data) setLots(data);
+  var loadSession = async function(sess) {
+    if (chanRef.current) chanRef.current.unsubscribe();
+    _setSid(sess.id); setSname(sess.name); setSid(sess.id);
+    var r = await sb.from('lots').select('*').eq('session_id', sess.id).order('created_at');
+    if (r.data) setLots(r.data);
     subscribe(sess.id); setTab('add'); notify('Session loaded');
   };
 
-  const deleteSession = async id => {
-    await sb.from('auction_sessions').delete().eq('id',id);
-    setSessions(ss=>ss.filter(s=>s.id!==id));
-    setConfirmDeleteSession(null);
-    if (id===sessionId) newSession();
+  var doDelSess = async function(id) {
+    await sb.from('auction_sessions').delete().eq('id', id);
+    setSess(function(ss){ return ss.filter(function(s){ return s.id!==id; }); });
+    setDelSess(null);
+    if (id === sid) startNewSession();
   };
 
-  /* ── Share ── */
-  const copyLink = (sid) => {
-    const url = sessionUrl(sid||sessionId);
+  var copyLink = function(id) {
+    var url = shareUrl(id||sid);
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(()=>notify('Link copied — share with your helper!'));
+      navigator.clipboard.writeText(url).then(function(){ notify('Link copied \u2014 share with your helper!'); });
     } else {
-      const ta=document.createElement('textarea'); ta.value=url;
-      document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); document.body.removeChild(ta);
+      var t = document.createElement('textarea');
+      t.value = url; document.body.appendChild(t); t.select();
+      document.execCommand('copy'); document.body.removeChild(t);
       notify('Link copied!');
     }
   };
 
-  /* ── Export ── */
-  const exportText = [
-    sessName, nowDate(), '='.repeat(44),
-    ...lots.map((l,i)=>
-      String(i+1).padStart(2,'0')+'  '+l.item+'\n'+
-      '    Grade: '+l.grade+
-      (l.color&&l.color!=='N/A'?'  |  Color: '+l.color:'')+
-      '  |  Grower: '+(l.grower||'—')+
-      '  |  Qty: '+(l.qty||'—')+' × '+l.unit+'\n'+
-      '    Lot total: '+fmt(l.total)+
-      (l.description?'\n    Notes: '+l.description:'')
-    ),
+  var addProd = async function() {
+    var v = newProd.trim();
+    if (!v || pdb.some(function(p){ return p.toLowerCase()===v.toLowerCase(); })) { setNP(''); return; }
+    await sb.from('produce_db').insert({ name: v });
+    setPdb(function(d){ return d.concat([v]).sort(function(a,b){ return a.localeCompare(b); }); });
+    setNP(''); notify('Added!');
+  };
+
+  var delProd = async function(item) {
+    await sb.from('produce_db').delete().eq('name', item);
+    setPdb(function(d){ return d.filter(function(p){ return p!==item; }); });
+  };
+
+  var runTotal    = lots.reduce(function(s,l){ return s + (parseFloat(l.total)||0); }, 0);
+  var loadedCount = lots.filter(function(l){ return l.is_loaded; }).length;
+
+  var reportItems = useMemo(function() {
+    var map = {};
+    lots.forEach(function(lot) {
+      var key = lot.item.trim().toLowerCase();
+      if (!map[key]) map[key] = { name:lot.item.trim(), cost:0, count:0, units:{} };
+      map[key].cost  += parseFloat(lot.total)||0;
+      map[key].count += 1;
+      var u = lot.unit || 'unit';
+      if (!map[key].units[u]) map[key].units[u] = { qty:0, cost:0, lots:0 };
+      map[key].units[u].qty  += parseFloat(lot.qty)||0;
+      map[key].units[u].cost += parseFloat(lot.total)||0;
+      map[key].units[u].lots += 1;
+    });
+    return Object.values(map).sort(function(a,b){ return b.cost - a.cost; });
+  }, [lots]);
+
+  var exportText = [
+    sname, dateStr(), '='.repeat(44),
+    ...lots.map(function(l,i) {
+      return String(i+1).padStart(2,'0') + '  ' + l.item + '\n' +
+        '    Grade: ' + l.grade +
+        (l.color && l.color!=='N/A' ? '  |  Color: '+l.color : '') +
+        '  |  Grower: ' + (l.grower||'\u2014') +
+        '  |  Qty: ' + (l.qty||'\u2014') + ' x ' + l.unit + '\n' +
+        '    Lot total: ' + fmt(l.total) +
+        (l.description ? '\n    Notes: ' + l.description : '');
+    }),
     '='.repeat(44),
-    'TOTAL: '+fmt(runTotal)+'  ('+lots.length+' lot'+(lots.length!==1?'s':'')+')'
+    'TOTAL: ' + fmt(runTotal) + '  (' + lots.length + ' lot' + (lots.length!==1?'s':'') + ')'
   ].join('\n\n');
 
-  const copyExport = () => {
-    if (navigator.clipboard) navigator.clipboard.writeText(exportText).then(()=>notify('Copied!'));
+  var copyExport = function() {
+    if (navigator.clipboard) navigator.clipboard.writeText(exportText).then(function(){ notify('Copied!'); });
   };
 
-  /* ── Produce DB ── */
-  const addDbItem = async () => {
-    const v=newItem.trim();
-    if (!v||db.some(p=>p.toLowerCase()===v.toLowerCase())) {setNewItem('');return;}
-    await sb.from('produce_db').insert({name:v});
-    setDb(d=>[...d,v].sort((a,b)=>a.localeCompare(b)));
-    setNewItem(''); notify('Added!');
-  };
-  const removeDbItem = async item => {
-    await sb.from('produce_db').delete().eq('name',item);
-    setDb(d=>d.filter(p=>p!==item));
+  // shared styles
+  var S = {
+    inp: { background:'var(--bg-s)', border:'0.5px solid var(--border)', borderRadius:'var(--r-md)',
+           padding:'9px 11px', fontSize:14, color:'var(--text-p)', outline:'none', width:'100%' },
+    lbl: { fontSize:11, color:'var(--text-t)', marginBottom:3, display:'block' },
+    card: { background:'var(--bg-p)', borderRadius:'var(--r-lg)', border:'0.5px solid var(--border)',
+            padding:'10px 14px', marginBottom:8 },
   };
 
-  /* ── Styles ── */
-  const inp = {
-    background:'var(--bg-s)', border:'0.5px solid var(--border)',
-    borderRadius:'var(--r-md)', padding:'9px 11px', fontSize:14,
-    color:'var(--text-p)', outline:'none', width:'100%', fontFamily:'inherit',
-  };
-  const lbl = {fontSize:11,color:'var(--text-t)',marginBottom:3,display:'block'};
-
-  /* ════════════════════════════════ RENDER */
   return (
-    <div style={{fontFamily:'inherit',paddingBottom:76}}>
+    <div style={{paddingBottom:76}}>
 
+      {/* Toast */}
       {toast && (
         <div style={{position:'fixed',top:16,left:'50%',transform:'translateX(-50%)',
-          background:toastErr?'#A32D2D':'#1D9E75',color:'#fff',
-          padding:'8px 22px',borderRadius:24,fontSize:14,fontWeight:500,
-          zIndex:1000,pointerEvents:'none',whiteSpace:'nowrap',
-          maxWidth:'90vw',textAlign:'center'}}>
+          background:toastErr?'#A32D2D':'var(--green)',color:'#fff',padding:'8px 22px',
+          borderRadius:24,fontSize:14,fontWeight:500,zIndex:1000,pointerEvents:'none',
+          whiteSpace:'nowrap',maxWidth:'90vw',textAlign:'center'}}>
           {toast}
         </div>
       )}
 
-      {/* Print-only header */}
-      <div className="print-show" style={{padding:'0 0 12px',borderBottom:'1px solid #ccc',marginBottom:16}}>
-        <div style={{fontSize:18,fontWeight:600}}>{sessName}</div>
-        <div style={{fontSize:13,color:'#666',marginTop:4}}>
-          {nowDate()} · {lots.length} lots · {fmt(runTotal)}
-        </div>
+      {/* Print header */}
+      <div className="po" style={{padding:'0 0 12px',borderBottom:'1px solid #ccc',marginBottom:16}}>
+        <div style={{fontSize:18,fontWeight:600}}>{sname}</div>
+        <div style={{fontSize:13,color:'#666',marginTop:4}}>{dateStr()} &middot; {lots.length} lots &middot; {fmt(runTotal)}</div>
       </div>
 
-      {/* ── Sticky header ── */}
-      <div className="no-print" style={{position:'sticky',top:0,zIndex:50,
-        background:'var(--bg-p)',borderBottom:'0.5px solid var(--border)',padding:'10px 16px'}}>
+      {/* Sticky header */}
+      <div className="np" style={{position:'sticky',top:0,zIndex:50,background:'var(--bg-p)',
+        borderBottom:'0.5px solid var(--border)',padding:'10px 16px'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:2}}>
           {editName ? (
-            <input ref={nameRef} value={sessName}
-              onChange={e=>setSessName(e.target.value)}
-              onBlur={e=>commitName(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&commitName(sessName)}
-              style={{...inp,fontSize:15,fontWeight:500,padding:'3px 6px',
-                width:'auto',flex:1,marginRight:8}} autoFocus />
+            <input ref={nameRef} value={sname} onChange={function(e){ setSname(e.target.value); }}
+              onBlur={function(e){ commitName(e.target.value); }}
+              onKeyDown={function(e){ if(e.key==='Enter') commitName(sname); }}
+              style={Object.assign({},S.inp,{fontSize:15,fontWeight:500,padding:'3px 6px',width:'auto',flex:1,marginRight:8})}
+              autoFocus />
           ) : (
-            <span onClick={()=>{setEditName(true);setTimeout(()=>nameRef.current&&nameRef.current.select(),50);}}
-              style={{fontSize:15,fontWeight:500,color:'var(--text-p)',cursor:'pointer',
-                display:'flex',alignItems:'center',gap:6}}>
-              {sessName}<span style={{fontSize:11,color:'var(--text-t)'}}>✎</span>
+            <span onClick={function(){ setEN(true); setTimeout(function(){ if(nameRef.current) nameRef.current.select(); },50); }}
+              style={{fontSize:15,fontWeight:500,color:'var(--text-p)',cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+              {sname}<span style={{fontSize:11,color:'var(--text-t)'}}>&#x270E;</span>
             </span>
           )}
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <button onClick={()=>copyLink(sessionId)}
+            <button onClick={function(){ copyLink(sid); }}
               style={{fontSize:12,padding:'5px 10px',borderRadius:'var(--r-md)',
-                border:'0.5px solid var(--green)',color:'var(--green)',
-                background:'transparent',cursor:'pointer',fontWeight:500}}>
-              Share ↗
+                border:'0.5px solid var(--green)',color:'var(--green)',background:'transparent',cursor:'pointer',fontWeight:500}}>
+              Share
             </button>
             <span style={{fontSize:20,fontWeight:500,color:'var(--green)'}}>{fmt(runTotal)}</span>
           </div>
         </div>
         <span style={{fontSize:12,color:'var(--text-s)'}}>
           {lots.length} lot{lots.length!==1?'s':''}
-          {loadedCount>0 && <span style={{color:'var(--green)',marginLeft:4}}>· {loadedCount} loaded</span>}
-          {' · '}{nowDate()}
-          {sessionId&&<span style={{fontSize:10,color:'var(--text-t)',marginLeft:8}}>#{sessionId.slice(0,8)}</span>}
+          {loadedCount > 0 && <span style={{color:'var(--green)',marginLeft:4}}>&middot; {loadedCount} loaded</span>}
+          &nbsp;&middot;&nbsp;{dateStr()}
+          {sid && <span style={{fontSize:10,color:'var(--text-t)',marginLeft:8}}>#{sid.slice(0,8)}</span>}
         </span>
       </div>
 
-
-      {/* ═══════ TAB: ADD LOT ═══════ */}
-      {tab==='add' && (
+      {/* ── TAB: ADD LOT ── */}
+      {tab === 'add' && (
         <div style={{padding:'12px 16px'}}>
-          <div className="no-print" style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
+
+          {/* Form card */}
+          <div className="np" style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
             border:'0.5px solid var(--border)',marginBottom:14,overflow:'hidden'}}>
 
-            {/* Form header — always visible */}
-            <div onClick={()=>setFormOpen(o=>!o)}
+            {/* Toggle header */}
+            <div onClick={function(){ setFO(function(o){ return !o; }); }}
               style={{display:'flex',justifyContent:'space-between',alignItems:'center',
-                padding:'12px 14px',cursor:'pointer',userSelect:'none'}}>
+                padding:'12px 14px',cursor:'pointer',userSelect:'none',WebkitUserSelect:'none'}}>
               <span style={{fontSize:11,fontWeight:500,letterSpacing:'0.06em',color:'var(--text-s)'}}>
-                {editId ? '✎  EDIT LOT' : 'NEW LOT'}
+                {editId ? '\u270E  EDIT LOT' : 'NEW LOT'}
               </span>
-              <span style={{fontSize:13,color:'var(--text-t)',lineHeight:1}}>
-                {formOpen ? '▲ hide' : '▼ show'}
+              <span style={{fontSize:12,color:'var(--text-t)'}}>
+                {formOpen ? '\u25b2 hide' : '\u25bc show'}
               </span>
             </div>
 
-            {/* Collapsible form body */}
-            {formOpen && <div style={{padding:'0 14px 14px'}}>
+            {/* Collapsible body */}
+            {formOpen && (
+              <div style={{padding:'0 14px 14px'}}>
 
-            {/* Item + autocomplete */}
-            <div style={{marginBottom:10,position:'relative'}}>
-              <label style={lbl}>PRODUCE ITEM</label>
-              <input ref={itemRef} value={form.item} onChange={e=>onItemInput(e.target.value)}
-                onKeyDown={e=>e.key==='Enter'&&saveLot()} placeholder="Start typing to search…"
-                style={inp} autoComplete="off" autoCorrect="off" />
-              {sugg.length>0&&(
-                <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:2,
-                  background:'var(--bg-p)',border:'0.5px solid var(--border-md)',
-                  borderRadius:'var(--r-md)',zIndex:100,overflow:'hidden',
-                  boxShadow:'0 4px 16px rgba(0,0,0,0.1)'}}>
-                  {sugg.map(s=>(
-                    <div key={s}
-                      onMouseDown={()=>pickSugg(s)}
-                      onTouchStart={e=>{e.preventDefault();pickSugg(s);}}
-                      style={{padding:'11px 14px',fontSize:14,cursor:'pointer',
-                        borderBottom:'0.5px solid var(--border)',color:'var(--text-p)'}}>
-                      {s}
+                {/* Produce item */}
+                <div style={{marginBottom:10,position:'relative'}}>
+                  <label style={S.lbl}>PRODUCE ITEM</label>
+                  <input ref={itemRef} value={form.item} onChange={function(e){ onItem(e.target.value); }}
+                    onKeyDown={function(e){ if(e.key==='Enter') saveLot(); }}
+                    placeholder="Start typing to search..."
+                    style={S.inp} autoComplete="off" />
+                  {sugg.length > 0 && (
+                    <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:2,
+                      background:'var(--bg-p)',border:'0.5px solid var(--border-md)',
+                      borderRadius:'var(--r-md)',zIndex:100,overflow:'hidden',
+                      boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                      {sugg.map(function(s) {
+                        return (
+                          <div key={s}
+                            onMouseDown={function(){ pickSugg(s); }}
+                            onTouchStart={function(e){ e.preventDefault(); pickSugg(s); }}
+                            style={{padding:'11px 14px',fontSize:14,cursor:'pointer',
+                              borderBottom:'0.5px solid var(--border)',color:'var(--text-p)'}}>
+                            {s}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Unit + Grower */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-              <div>
-                <label style={lbl}>UNIT TYPE</label>
-                <select value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))}
-                  style={{...inp,cursor:'pointer'}}>
-                  {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
-                  <option value="__custom__">Custom…</option>
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>GROWER #</label>
-                <input value={form.grower} onChange={e=>setForm(f=>({...f,grower:e.target.value}))}
-                  placeholder="e.g. 4471" style={inp} />
-              </div>
-            </div>
+                {/* Unit + Grower */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+                  <div>
+                    <label style={S.lbl}>UNIT TYPE</label>
+                    <select value={form.unit} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{unit:e.target.value}); }); }}
+                      style={Object.assign({},S.inp,{cursor:'pointer'})}>
+                      {UNITS.map(function(u){ return <option key={u} value={u}>{u}</option>; })}
+                      <option value="__custom__">Custom...</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={S.lbl}>GROWER #</label>
+                    <input value={form.grower} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{grower:e.target.value}); }); }}
+                      placeholder="e.g. 4471" style={S.inp} />
+                  </div>
+                </div>
 
-            {form.unit==='__custom__'&&(
-              <div style={{marginBottom:10}}>
-                <label style={lbl}>CUSTOM UNIT</label>
-                <input value={customUnit} onChange={e=>setCustomUnit(e.target.value)}
-                  placeholder="e.g. wooden crate" style={inp} />
+                {/* Custom unit */}
+                {form.unit === '__custom__' && (
+                  <div style={{marginBottom:10}}>
+                    <label style={S.lbl}>CUSTOM UNIT</label>
+                    <input value={custUnit} onChange={function(e){ setCU(e.target.value); }}
+                      placeholder="e.g. wooden crate" style={S.inp} />
+                  </div>
+                )}
+
+                {/* Grade */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>GRADE</label>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5}}>
+                    {GRADES.map(function(g) {
+                      var gs = GS[g]; var on = form.grade === g;
+                      return (
+                        <button key={g} onClick={function(){ setForm(function(f){ return Object.assign({},f,{grade:g}); }); }}
+                          style={{padding:'9px 4px',fontSize:12,fontWeight:500,
+                            borderRadius:'var(--r-md)',cursor:'pointer',transition:'all .1s',
+                            border: on ? '1.5px solid '+gs.br : '0.5px solid var(--border)',
+                            background: on ? gs.bg : 'var(--bg-s)',
+                            color: on ? gs.fg : 'var(--text-s)'}}>
+                          {g}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Color */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>COLOR</label>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    {form.color !== 'N/A' && CDOT[form.color] && (
+                      <span style={{width:10,height:10,borderRadius:'50%',background:CDOT[form.color],flexShrink:0}} />
+                    )}
+                    <select value={form.color} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{color:e.target.value}); }); }}
+                      style={Object.assign({},S.inp,{cursor:'pointer',width:'auto',flex:1})}>
+                      {COLORS.map(function(c){ return <option key={c} value={c}>{c}</option>; })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Qty + Price */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                  <div>
+                    <label style={S.lbl}>QTY</label>
+                    <input value={form.qty} onChange={function(e){ onQty(e.target.value); }}
+                      type="number" inputMode="decimal" placeholder="0" style={S.inp} />
+                  </div>
+                  <div>
+                    <label style={S.lbl}>PRICE / UNIT $</label>
+                    <input value={form.price} onChange={function(e){ onPrice(e.target.value); }}
+                      type="number" inputMode="decimal" placeholder="0.00" style={S.inp} />
+                  </div>
+                </div>
+
+                {/* Total */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>TOTAL LOT COST $</label>
+                  <input value={form.total} onChange={function(e){ onTotal(e.target.value); }}
+                    type="number" inputMode="decimal" placeholder="or enter lot total directly"
+                    style={Object.assign({},S.inp,{background:'var(--green-l)',border:'0.5px solid var(--green-b)',
+                      color:'var(--green-d)',fontSize:17,fontWeight:500})} />
+                </div>
+
+                {/* Notes */}
+                <div style={{marginBottom:12}}>
+                  <label style={S.lbl}>NOTES (optional)</label>
+                  <textarea value={form.description}
+                    onChange={function(e){ setForm(function(f){ return Object.assign({},f,{description:e.target.value}); }); }}
+                    placeholder="e.g. slight bruising, early pick, good size..."
+                    rows={2}
+                    style={Object.assign({},S.inp,{resize:'vertical',lineHeight:1.5,padding:'8px 11px',fontSize:13})}>
+                  </textarea>
+                </div>
+
+                {/* Buttons */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:8}}>
+                  <button
+                    onClick={function(){ setForm(function(f){ return Object.assign({},BLANK,{unit:f.unit,grade:f.grade,color:f.color,grower:f.grower}); }); setEid(null); setSugg([]); }}
+                    style={{padding:11,fontSize:14,borderRadius:'var(--r-md)',border:'0.5px solid var(--border-md)',
+                      background:'var(--bg-s)',color:'var(--text-s)',cursor:'pointer'}}>
+                    Clear
+                  </button>
+                  <button onClick={saveLot}
+                    style={{padding:11,fontSize:15,fontWeight:500,borderRadius:'var(--r-md)',
+                      border:'none',background:'var(--green)',color:'#fff',cursor:'pointer'}}>
+                    {editId ? 'Update Lot' : 'Save + Next'}
+                  </button>
+                </div>
+
               </div>
             )}
+          </div>
 
-            {/* Grade (tap buttons) */}
-            <div style={{marginBottom:10}}>
-              <label style={lbl}>GRADE</label>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5}}>
-                {GRADES.map(g=>{
-                  const gs=GS[g]; const on=form.grade===g;
-                  return (
-                    <button key={g} onClick={()=>setForm(f=>({...f,grade:g}))} style={{
-                      padding:'9px 4px',fontSize:12,fontWeight:500,
-                      borderRadius:'var(--r-md)',
-                      border:on?'1.5px solid '+gs.border:'0.5px solid var(--border)',
-                      background:on?gs.bg:'var(--bg-s)',
-                      color:on?gs.color:'var(--text-s)',
-                      cursor:'pointer',transition:'all 0.1s'
-                    }}>{g}</button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Color (dropdown) */}
-            <div style={{marginBottom:10}}>
-              <label style={lbl}>COLOR</label>
-              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                {form.color!=='N/A'&&COLOR_DOT[form.color]&&(
-                  <span style={{width:10,height:10,borderRadius:'50%',
-                    background:COLOR_DOT[form.color],flexShrink:0}}/>
-                )}
-                <select value={form.color} onChange={e=>setForm(f=>({...f,color:e.target.value}))}
-                  style={{...inp,cursor:'pointer',width:'auto',flex:1}}>
-                  {COLORS.map(c=><option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Qty + Price */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-              <div>
-                <label style={lbl}>QTY</label>
-                <input value={form.qty} onChange={e=>onQty(e.target.value)}
-                  type="number" inputMode="decimal" placeholder="0" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>PRICE / UNIT $</label>
-                <input value={form.price} onChange={e=>onPrice(e.target.value)}
-                  type="number" inputMode="decimal" placeholder="0.00" style={inp} />
-              </div>
-            </div>
-
-            {/* Total */}
-            <div style={{marginBottom:10}}>
-              <label style={lbl}>TOTAL LOT COST $</label>
-              <input value={form.total} onChange={e=>onTotal(e.target.value)}
-                type="number" inputMode="decimal" placeholder="or enter lot total directly"
-                style={{...inp,background:'var(--green-l)',border:'0.5px solid var(--green-b)',
-                  color:'var(--green-d)',fontSize:17,fontWeight:500}} />
-            </div>
-
-            {/* Notes */}
-            <div style={{marginBottom:12}}>
-              <label style={lbl}>NOTES (optional)</label>
-              <textarea value={form.description}
-                onChange={e=>setForm(f=>({...f,description:e.target.value}))}
-                placeholder="e.g. slight bruising, early pick, good size…"
-                rows={2}
-                style={{...inp,resize:'vertical',lineHeight:1.5,padding:'8px 11px',fontSize:13}} />
-            </div>
-
-            {/* Buttons */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:8}}>
-              <button onClick={()=>{setForm(f=>({...BLANK,unit:f.unit,grade:f.grade,color:f.color,grower:f.grower}));setEditId(null);setSugg([]);}}
-                style={{padding:11,fontSize:14,borderRadius:'var(--r-md)',
-                  border:'0.5px solid var(--border-md)',
-                  background:'var(--bg-s)',color:'var(--text-s)',cursor:'pointer'}}>
-                Clear
-              </button>
-              <button onClick={saveLot} style={{padding:11,fontSize:15,fontWeight:500,
-                borderRadius:'var(--r-md)',border:'none',
-                background:'var(--green)',color:'#fff',cursor:'pointer'}}>
-                {editId?'Update Lot':'Save + Next ↵'}
-              </button>
-            </div>
-          </div>{/* end collapsible body */}
-          </div>{/* end form card */}
-
-          {/* Lots list */}
-          {lots.length>0 ? (
+          {/* Lot list */}
+          {lots.length > 0 ? (
             <div>
-              <div className="no-print" style={{fontSize:11,fontWeight:500,letterSpacing:'0.06em',
+              <div className="np" style={{fontSize:11,fontWeight:500,letterSpacing:'0.06em',
                 color:'var(--text-s)',marginBottom:8}}>
                 SAVED LOTS ({lots.length})
               </div>
-              {[...lots].reverse().map(lot=>{
-                const gs=GS[lot.grade]||GS['No. 1'];
-                const dot=COLOR_DOT[lot.color];
+
+              {lots.slice().reverse().map(function(lot) {
+                var gs  = GS[lot.grade] || GS['No. 1'];
+                var dot = CDOT[lot.color];
                 return (
-                  <div key={lot.id} className="lot-card" style={{background: lot.is_loaded ? 'var(--green-l)' : 'var(--bg-p)',
-                    borderRadius:'var(--r-lg)',
-                    border: lot.is_loaded ? '0.5px solid var(--green-b)' : '0.5px solid var(--border)',
-                    padding:'10px 14px',marginBottom:8}}>
+                  <div key={lot.id} className="lc"
+                    style={{background: lot.is_loaded ? 'var(--green-l)' : 'var(--bg-p)',
+                      borderRadius:'var(--r-lg)',
+                      border: lot.is_loaded ? '0.5px solid var(--green-b)' : '0.5px solid var(--border)',
+                      padding:'10px 14px',marginBottom:8}}>
+
+                    {/* Card top row */}
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
                       <div style={{display:'flex',alignItems:'center',gap:8}}>
-                        {dot&&<span style={{width:10,height:10,borderRadius:'50%',background:dot,flexShrink:0}}/>}
+                        {dot && <span style={{width:10,height:10,borderRadius:'50%',background:dot,flexShrink:0}} />}
                         <span style={{fontSize:15,fontWeight:500,
                           color: lot.is_loaded ? 'var(--green-d)' : 'var(--text-p)',
                           textDecoration: lot.is_loaded ? 'line-through' : 'none',
@@ -612,42 +584,47 @@ function ProduceTracker() {
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:8}}>
                         <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,
-                          background:gs.bg,color:gs.color,fontWeight:500,flexShrink:0}}>
+                          background:gs.bg,color:gs.fg,fontWeight:500,flexShrink:0}}>
                           {lot.grade}
                         </span>
-                        <button onClick={()=>toggleLoaded(lot.id)} title={lot.is_loaded?'Mark unloaded':'Mark loaded'}
+                        <button onClick={function(){ toggleLoaded(lot.id); }}
+                          title={lot.is_loaded ? 'Mark unloaded' : 'Mark loaded'}
                           style={{width:30,height:30,borderRadius:'50%',flexShrink:0,cursor:'pointer',
                             border: lot.is_loaded ? 'none' : '1.5px solid var(--border-md)',
                             background: lot.is_loaded ? 'var(--green)' : 'transparent',
                             color: lot.is_loaded ? '#fff' : 'var(--text-t)',
-                            fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',
-                            fontWeight:600}}>
-                          {lot.is_loaded ? '✓' : '○'}
+                            fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:600}}>
+                          {lot.is_loaded ? '\u2713' : '\u25cb'}
                         </button>
                       </div>
                     </div>
-                    <div style={{fontSize:12,color:'var(--text-s)',marginBottom:lot.description?4:6}}>
-                      <b style={{color:'var(--text-p)',fontWeight:500}}>{lot.qty||'—'}</b> × {lot.unit}
-                      {lot.price&&<span style={{marginLeft:8}}>{fmt(lot.price)}/unit</span>}
+
+                    {/* Qty row */}
+                    <div style={{fontSize:12,color:'var(--text-s)',marginBottom: lot.description ? 4 : 6}}>
+                      <b style={{color:'var(--text-p)',fontWeight:500}}>{lot.qty||'\u2014'}</b> &times; {lot.unit}
+                      {lot.price ? <span style={{marginLeft:8}}>{fmt(lot.price)}/unit</span> : null}
                     </div>
-                    {lot.description&&(
-                      <div style={{fontSize:12,color:'var(--text-t)',fontStyle:'italic',
-                        marginBottom:6,lineHeight:1.4}}>
+
+                    {/* Notes */}
+                    {lot.description ? (
+                      <div style={{fontSize:12,color:'var(--text-t)',fontStyle:'italic',marginBottom:6,lineHeight:1.4}}>
                         {lot.description}
                       </div>
-                    )}
-                    {confirmDelete===lot.id ? (
+                    ) : null}
+
+                    {/* Footer: confirm delete or normal actions */}
+                    {delLot === lot.id ? (
                       <div style={{paddingTop:8,borderTop:'0.5px solid var(--border)',
                         display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                         <span style={{fontSize:12,color:'var(--text-s)'}}>Remove this lot?</span>
                         <div style={{display:'flex',gap:8}}>
-                          <button onClick={()=>setConfirmDelete(null)}
+                          <button onClick={function(){ setDelLot(null); }}
                             style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--r-md)',
                               border:'0.5px solid var(--border-md)',background:'var(--bg-s)',
                               color:'var(--text-s)',cursor:'pointer'}}>
                             Cancel
                           </button>
-                          <button onClick={()=>deleteLot(lot.id)}
+                          <button onClick={function(){ doDelLot(lot.id); }}
                             style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--r-md)',
                               border:'none',background:'#A32D2D',color:'#fff',cursor:'pointer',fontWeight:500}}>
                             Yes, remove
@@ -658,17 +635,17 @@ function ProduceTracker() {
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
                         paddingTop:6,borderTop:'0.5px solid var(--border)'}}>
                         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-                          {lot.grower&&(
+                          {lot.grower ? (
                             <span style={{fontSize:11,background:'var(--bg-s)',color:'var(--text-s)',
                               padding:'2px 8px',borderRadius:20}}>
                               GR {lot.grower}
                             </span>
-                          )}
-                          <button className="no-print" onClick={()=>startEdit(lot)}
+                          ) : null}
+                          <button className="np" onClick={function(){ startEdit(lot); }}
                             style={{fontSize:12,color:'#185FA5',background:'none',border:'none',cursor:'pointer',padding:0}}>
                             Edit
                           </button>
-                          <button className="no-print" onClick={()=>setConfirmDelete(lot.id)}
+                          <button className="np" onClick={function(){ setDelLot(lot.id); }}
                             style={{fontSize:12,color:'#A32D2D',background:'none',border:'none',cursor:'pointer',padding:0}}>
                             Remove
                           </button>
@@ -679,6 +656,7 @@ function ProduceTracker() {
                   </div>
                 );
               })}
+
               <div style={{background:'var(--bg-t)',borderRadius:'var(--r-md)',
                 padding:'12px 14px',display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4}}>
                 <span style={{fontSize:14,color:'var(--text-s)'}}>Total ({lots.length} lots)</span>
@@ -687,76 +665,70 @@ function ProduceTracker() {
             </div>
           ) : (
             <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>
-              No lots yet — fill out the form above
+              No lots yet &mdash; fill out the form above
             </div>
           )}
         </div>
       )}
 
-
-      {/* ═══════ TAB: SESSIONS ═══════ */}
-      {tab==='lists' && (
+      {/* ── TAB: SESSIONS ── */}
+      {tab === 'lists' && (
         <div style={{padding:'12px 16px'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
             <span style={{fontSize:14,fontWeight:500,color:'var(--text-p)'}}>Auction Sessions</span>
-            <button onClick={newSession} style={{fontSize:13,padding:'6px 14px',
-              borderRadius:'var(--r-md)',border:'0.5px solid var(--green)',
-              background:'transparent',color:'var(--green)',cursor:'pointer',fontWeight:500}}>
+            <button onClick={startNewSession}
+              style={{fontSize:13,padding:'6px 14px',borderRadius:'var(--r-md)',
+                border:'0.5px solid var(--green)',background:'transparent',color:'var(--green)',
+                cursor:'pointer',fontWeight:500}}>
               + New Session
             </button>
           </div>
 
-          {sessions.length===0 ? (
-            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>
-              No sessions yet
-            </div>
-          ) : sessions.map(sess=>{
-            const isCurrent = sess.id===sessionId;
+          {sessions.length === 0 ? (
+            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>No sessions yet</div>
+          ) : sessions.map(function(sess) {
+            var isCur = sess.id === sid;
             return (
-              <div key={sess.id} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
-                border:isCurrent?'1.5px solid var(--green)':'0.5px solid var(--border)',
-                padding:'12px 14px',marginBottom:8}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-                  <div>
-                    <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)',marginBottom:2}}>
-                      {sess.name}
-                      {isCurrent&&<span style={{fontSize:11,marginLeft:8,color:'var(--green)',fontWeight:400}}>● live</span>}
-                    </div>
-                    <div style={{fontSize:12,color:'var(--text-s)'}}>
-                      {new Date(sess.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
-                    </div>
-                  </div>
+              <div key={sess.id}
+                style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
+                  border: isCur ? '1.5px solid var(--green)' : '0.5px solid var(--border)',
+                  padding:'12px 14px',marginBottom:8}}>
+                <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)',marginBottom:2}}>
+                  {sess.name}
+                  {isCur && <span style={{fontSize:11,marginLeft:8,color:'var(--green)',fontWeight:400}}>&bull; live</span>}
                 </div>
-                <div style={{display:'flex',gap:14,marginTop:10,paddingTop:10,borderTop:'0.5px solid var(--border)'}}>
-                  {confirmDeleteSession===sess.id ? (
+                <div style={{fontSize:12,color:'var(--text-s)',marginBottom:10}}>
+                  {new Date(sess.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+                </div>
+                <div style={{display:'flex',gap:14,paddingTop:10,borderTop:'0.5px solid var(--border)',alignItems:'center',flexWrap:'wrap'}}>
+                  {delSess === sess.id ? (
                     <>
-                      <span style={{fontSize:12,color:'var(--text-s)',alignSelf:'center'}}>Delete this session?</span>
-                      <button onClick={()=>setConfirmDeleteSession(null)}
+                      <span style={{fontSize:12,color:'var(--text-s)'}}>Delete this session?</span>
+                      <button onClick={function(){ setDelSess(null); }}
                         style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--r-md)',
                           border:'0.5px solid var(--border-md)',background:'var(--bg-s)',
                           color:'var(--text-s)',cursor:'pointer',marginLeft:'auto'}}>
                         Cancel
                       </button>
-                      <button onClick={()=>deleteSession(sess.id)}
+                      <button onClick={function(){ doDelSess(sess.id); }}
                         style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--r-md)',
-                          border:'none',background:'#A32D2D',color:'#fff',
-                          cursor:'pointer',fontWeight:500}}>
+                          border:'none',background:'#A32D2D',color:'#fff',cursor:'pointer',fontWeight:500}}>
                         Yes, delete
                       </button>
                     </>
                   ) : (
                     <>
-                      {!isCurrent&&(
-                        <button onClick={()=>loadSession(sess)}
+                      {!isCur && (
+                        <button onClick={function(){ loadSession(sess); }}
                           style={{fontSize:13,color:'#185FA5',background:'none',border:'none',cursor:'pointer',padding:0}}>
                           Load
                         </button>
                       )}
-                      <button onClick={()=>copyLink(sess.id)}
+                      <button onClick={function(){ copyLink(sess.id); }}
                         style={{fontSize:13,color:'var(--green)',background:'none',border:'none',cursor:'pointer',padding:0}}>
                         Copy link
                       </button>
-                      <button onClick={()=>setConfirmDeleteSession(sess.id)}
+                      <button onClick={function(){ setDelSess(sess.id); }}
                         style={{fontSize:13,color:'#A32D2D',background:'none',border:'none',cursor:'pointer',padding:0}}>
                         Delete
                       </button>
@@ -769,182 +741,177 @@ function ProduceTracker() {
         </div>
       )}
 
-
-      {/* ═══════ TAB: PRINT/EXPORT ═══════ */}
-      {tab==='export' && (
-        <div style={{padding:'12px 16px'}}>
-          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:12}}>Print / Export</div>
-          {lots.length===0 ? (
-            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>
-              Add some lots first
-            </div>
-          ) : (
-            <>
-              <div style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
-                border:'0.5px solid var(--border)',padding:14,
-                fontFamily:'monospace',fontSize:12,lineHeight:1.8,
-                color:'var(--text-p)',whiteSpace:'pre-wrap',marginBottom:12,overflowX:'auto'}}>
-                {exportText}
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                <button onClick={copyExport} style={{padding:11,fontSize:13,fontWeight:500,
-                  borderRadius:'var(--r-md)',border:'0.5px solid var(--green)',
-                  background:'transparent',color:'var(--green)',cursor:'pointer'}}>
-                  Copy text
-                </button>
-                <button onClick={()=>window.print()} style={{padding:11,fontSize:13,fontWeight:500,
-                  borderRadius:'var(--r-md)',border:'none',
-                  background:'var(--green)',color:'#fff',cursor:'pointer'}}>
-                  Print
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-
-      {/* ═══════ TAB: ITEMS DB ═══════ */}
-      {tab==='db' && (
-        <div style={{padding:'12px 16px'}}>
-          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Produce Database</div>
-          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
-            {db.length} items · Shared across all sessions · Auto-saves new items
-          </div>
-          <div style={{display:'flex',gap:8,marginBottom:14}}>
-            <input value={newItem} onChange={e=>setNewItem(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&addDbItem()}
-              placeholder="Add item manually…"
-              style={{...inp,flex:1,width:'auto'}} />
-            <button onClick={addDbItem} style={{padding:'9px 18px',fontSize:14,fontWeight:500,
-              borderRadius:'var(--r-md)',border:'none',background:'var(--green)',
-              color:'#fff',cursor:'pointer',flexShrink:0}}>
-              Add
-            </button>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
-            {db.map(item=>(
-              <div key={item} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
-                background:'var(--bg-p)',border:'0.5px solid var(--border)',
-                borderRadius:'var(--r-md)',padding:'7px 10px'}}>
-                <span style={{fontSize:13,color:'var(--text-p)'}}>{item}</span>
-                <button onClick={()=>removeDbItem(item)} style={{fontSize:18,lineHeight:1,
-                  color:'var(--text-t)',background:'none',border:'none',cursor:'pointer',padding:'0 0 0 6px'}}>
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-
-      {/* ═══════ TAB: REPORTS ═══════ */}
-      {tab==='reports' && (
+      {/* ── TAB: REPORTS ── */}
+      {tab === 'reports' && (
         <div style={{padding:'12px 16px'}}>
           <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Purchase Report</div>
           <div style={{fontSize:12,color:'var(--text-s)',marginBottom:14}}>
-            {sessName} · {lots.length} lots · {fmt(runTotal)}
+            {sname} &middot; {lots.length} lots &middot; {fmt(runTotal)}
           </div>
-
-          {lots.length===0 ? (
+          {lots.length === 0 ? (
             <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>
               Add some lots to see the report
             </div>
           ) : (
-            <>
-              {/* Summary row */}
+            <div>
+              {/* Summary stats */}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
-                {[
-                  {label:'Total Paid', value:fmt(runTotal)},
-                  {label:'Lots',       value:lots.length},
-                  {label:'Products',   value:reportItems.length},
-                ].map(s=>(
-                  <div key={s.label} style={{background:'var(--bg-t)',borderRadius:'var(--r-md)',
-                    padding:'10px 8px',textAlign:'center'}}>
-                    <div style={{fontSize:10,color:'var(--text-t)',marginBottom:4,letterSpacing:'0.04em'}}>
-                      {s.label.toUpperCase()}
+                {[{lbl:'Total Paid',val:fmt(runTotal)},{lbl:'Lots',val:lots.length},{lbl:'Products',val:reportItems.length}].map(function(s){
+                  return (
+                    <div key={s.lbl} style={{background:'var(--bg-t)',borderRadius:'var(--r-md)',padding:'10px 8px',textAlign:'center'}}>
+                      <div style={{fontSize:10,color:'var(--text-t)',marginBottom:4,letterSpacing:'.04em'}}>{s.lbl.toUpperCase()}</div>
+                      <div style={{fontSize:17,fontWeight:500,color:'var(--text-p)'}}>{s.val}</div>
                     </div>
-                    <div style={{fontSize:17,fontWeight:500,color:'var(--text-p)'}}>{s.value}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {/* Per-product breakdown */}
-              {reportItems.map(item=>(
-                <div key={item.name} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
-                  border:'0.5px solid var(--border)',marginBottom:8,overflow:'hidden'}}>
-                  {/* Item header */}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
-                    padding:'10px 14px',borderBottom:'0.5px solid var(--border)'}}>
-                    <span style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{item.name}</span>
-                    <div style={{textAlign:'right'}}>
-                      <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{fmt(item.totalCost)}</div>
-                      <div style={{fontSize:11,color:'var(--text-t)'}}>{item.lotCount} lot{item.lotCount!==1?'s':''}</div>
-                    </div>
-                  </div>
-                  {/* Unit breakdown */}
-                  {Object.entries(item.units).map(([unit,data])=>(
-                    <div key={unit} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
-                      padding:'8px 14px',borderBottom:'0.5px solid var(--border)'}}>
-                      <div>
-                        <span style={{fontSize:13,fontWeight:500,color:'var(--text-p)'}}>
-                          {Number.isInteger(data.qty) ? data.qty : parseFloat(data.qty.toFixed(1))}
-                        </span>
-                        <span style={{fontSize:12,color:'var(--text-s)',marginLeft:4}}>× {unit}</span>
-                        {data.lots>1&&<span style={{fontSize:11,color:'var(--text-t)',marginLeft:8}}>({data.lots} lots)</span>}
+              {/* Per-product cards */}
+              {reportItems.map(function(item) {
+                return (
+                  <div key={item.name} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
+                    border:'0.5px solid var(--border)',marginBottom:8,overflow:'hidden'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                      padding:'10px 14px',borderBottom:'0.5px solid var(--border)'}}>
+                      <span style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{item.name}</span>
+                      <div style={{textAlign:'right'}}>
+                        <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{fmt(item.cost)}</div>
+                        <div style={{fontSize:11,color:'var(--text-t)'}}>{item.count} lot{item.count!==1?'s':''}</div>
                       </div>
-                      <span style={{fontSize:13,color:'var(--text-s)'}}>{fmt(data.cost)}</span>
                     </div>
-                  ))}
-                  {/* Pct of total */}
-                  <div style={{padding:'6px 14px',background:'var(--bg-s)'}}>
-                    <div style={{height:4,borderRadius:2,background:'var(--bg-t)',overflow:'hidden'}}>
-                      <div style={{height:'100%',borderRadius:2,background:'var(--green)',
-                        width:(item.totalCost/runTotal*100).toFixed(1)+'%'}}/>
-                    </div>
-                    <div style={{fontSize:10,color:'var(--text-t)',marginTop:3}}>
-                      {(item.totalCost/runTotal*100).toFixed(1)}% of total spend
+                    {Object.entries(item.units).map(function(entry) {
+                      var unit = entry[0]; var data = entry[1];
+                      var qtyDisplay = Number.isInteger(data.qty) ? data.qty : parseFloat(data.qty.toFixed(1));
+                      return (
+                        <div key={unit} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                          padding:'8px 14px',borderBottom:'0.5px solid var(--border)'}}>
+                          <div>
+                            <span style={{fontSize:13,fontWeight:500,color:'var(--text-p)'}}>{qtyDisplay}</span>
+                            <span style={{fontSize:12,color:'var(--text-s)',marginLeft:4}}>&times; {unit}</span>
+                            {data.lots > 1 && <span style={{fontSize:11,color:'var(--text-t)',marginLeft:8}}>({data.lots} lots)</span>}
+                          </div>
+                          <span style={{fontSize:13,color:'var(--text-s)'}}>{fmt(data.cost)}</span>
+                        </div>
+                      );
+                    })}
+                    <div style={{padding:'6px 14px',background:'var(--bg-s)'}}>
+                      <div style={{height:4,borderRadius:2,background:'var(--bg-t)',overflow:'hidden'}}>
+                        <div style={{height:'100%',borderRadius:2,background:'var(--green)',
+                          width:(item.cost/runTotal*100).toFixed(1)+'%'}} />
+                      </div>
+                      <div style={{fontSize:10,color:'var(--text-t)',marginTop:3}}>
+                        {(item.cost/runTotal*100).toFixed(1)}% of total spend
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
 
+      {/* ── TAB: PRINT/EXPORT ── */}
+      {tab === 'export' && (
+        <div style={{padding:'12px 16px'}}>
+          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:12}}>Print / Export</div>
+          {lots.length === 0 ? (
+            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>
+              Add some lots first
+            </div>
+          ) : (
+            <div>
+              <div style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',border:'0.5px solid var(--border)',
+                padding:14,fontFamily:'monospace',fontSize:12,lineHeight:1.8,
+                color:'var(--text-p)',whiteSpace:'pre-wrap',marginBottom:12,overflowX:'auto'}}>
+                {exportText}
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <button onClick={copyExport}
+                  style={{padding:11,fontSize:13,fontWeight:500,borderRadius:'var(--r-md)',
+                    border:'0.5px solid var(--green)',background:'transparent',color:'var(--green)',cursor:'pointer'}}>
+                  Copy text
+                </button>
+                <button onClick={function(){ window.print(); }}
+                  style={{padding:11,fontSize:13,fontWeight:500,borderRadius:'var(--r-md)',
+                    border:'none',background:'var(--green)',color:'#fff',cursor:'pointer'}}>
+                  Print
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* ── Bottom nav (5 tabs) ── */}
-      <div className="no-print" style={{position:'fixed',bottom:0,left:0,right:0,
-        background:'var(--bg-p)',borderTop:'0.5px solid var(--border)',
-        display:'flex',padding:'8px 0 10px'}}>
+      {/* ── TAB: ITEMS DB ── */}
+      {tab === 'db' && (
+        <div style={{padding:'12px 16px'}}>
+          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Produce Database</div>
+          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
+            {pdb.length} items &middot; Shared across sessions &middot; Auto-saves new items
+          </div>
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            <input value={newProd} onChange={function(e){ setNP(e.target.value); }}
+              onKeyDown={function(e){ if(e.key==='Enter') addProd(); }}
+              placeholder="Add item manually..."
+              style={Object.assign({},S.inp,{flex:1,width:'auto'})} />
+            <button onClick={addProd}
+              style={{padding:'9px 18px',fontSize:14,fontWeight:500,borderRadius:'var(--r-md)',
+                border:'none',background:'var(--green)',color:'#fff',cursor:'pointer',flexShrink:0}}>
+              Add
+            </button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            {pdb.map(function(item) {
+              return (
+                <div key={item} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                  background:'var(--bg-p)',border:'0.5px solid var(--border)',
+                  borderRadius:'var(--r-md)',padding:'7px 10px'}}>
+                  <span style={{fontSize:13,color:'var(--text-p)'}}>{item}</span>
+                  <button onClick={function(){ delProd(item); }}
+                    style={{fontSize:18,lineHeight:1,color:'var(--text-t)',background:'none',
+                      border:'none',cursor:'pointer',padding:'0 0 0 6px'}}>
+                    &times;
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Bottom nav ── */}
+      <div className="np" style={{position:'fixed',bottom:0,left:0,right:0,background:'var(--bg-p)',
+        borderTop:'0.5px solid var(--border)',display:'flex',padding:'8px 0 10px'}}>
         {[
-          {id:'add',     icon:'＋', label:'Add Lot' },
-          {id:'lists',   icon:'☰',  label:'Sessions'},
-          {id:'reports', icon:'≡',  label:'Reports' },
-          {id:'export',  icon:'⎙',  label:'Print'   },
-          {id:'db',      icon:'⊞',  label:'Items'   },
-        ].map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,
-              background:'none',border:'none',cursor:'pointer',padding:'4px 0'}}>
-            <span style={{fontSize:20,lineHeight:1,color:tab===t.id?'var(--green)':'var(--text-t)'}}>
-              {t.icon}
-            </span>
-            <span style={{fontSize:9,color:tab===t.id?'var(--green)':'var(--text-t)',fontWeight:tab===t.id?600:400}}>
-              {t.label}
-            </span>
-            {tab===t.id&&<div style={{width:4,height:4,borderRadius:'50%',background:'var(--green)'}}/>}
-          </button>
-        ))}
+          {id:'add',     icon:'+',   label:'Add Lot' },
+          {id:'lists',   icon:'\u2630', label:'Sessions'},
+          {id:'reports', icon:'\u2261', label:'Reports' },
+          {id:'export',  icon:'\u2399', label:'Print'   },
+          {id:'db',      icon:'\u229e', label:'Items'   },
+        ].map(function(t) {
+          var on = tab === t.id;
+          return (
+            <button key={t.id} onClick={function(){ setTab(t.id); }}
+              style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,
+                background:'none',border:'none',cursor:'pointer',padding:'4px 0'}}>
+              <span style={{fontSize:20,lineHeight:1,color: on ? 'var(--green)' : 'var(--text-t)'}}>
+                {t.icon}
+              </span>
+              <span style={{fontSize:9,color: on ? 'var(--green)' : 'var(--text-t)',fontWeight: on ? 600 : 400}}>
+                {t.label}
+              </span>
+              {on && <div style={{width:4,height:4,borderRadius:'50%',background:'var(--green)'}} />}
+            </button>
+          );
+        })}
       </div>
 
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<ProduceTracker />);
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
 </script>
 </body>
 </html>

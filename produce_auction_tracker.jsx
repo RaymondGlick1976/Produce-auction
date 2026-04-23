@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const DEFAULT_PRODUCE = [
   'Acorn Squash','Apples','Asparagus','Avocados','Bananas','Beets',
@@ -22,6 +22,14 @@ const UNITS = [
 ];
 
 const GRADES = ['No. 1','No. 2','No. 3','Canners'];
+const COLORS = ['N/A','Green','Yellow','Red','Mixed'];
+const COLOR_DOT = { Green:'#1D9E75', Yellow:'#EF9F27', Red:'#E24B4A', Mixed:'#888780' };
+const CS = {
+  'Green':  { bg:'#E1F5EE', color:'#085041', border:'#5DCAA5', dot:'#1D9E75' },
+  'Yellow': { bg:'#FAEEDA', color:'#633806', border:'#EF9F27', dot:'#EF9F27' },
+  'Red':    { bg:'#FCEBEB', color:'#501313', border:'#F09595', dot:'#E24B4A' },
+  'Mixed':  { bg:'#F1EFE8', color:'#2C2C2A', border:'#B4B2A9', dot:'#888780' },
+};
 
 const GS = {
   'No. 1':  { bg:'#E1F5EE', color:'#085041', border:'#5DCAA5' },
@@ -33,22 +41,25 @@ const GS = {
 const fmt = v => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const nowDate  = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const nowShort = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
-const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', grower:'', qty:'', price:'', total:'' };
+const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', color:'N/A', grower:'', qty:'', price:'', total:'', description:'', is_loaded:false };
 
 export default function ProduceTracker() {
-  const [tab,        setTab]        = useState('add');
-  const [db,         setDb]         = useState(DEFAULT_PRODUCE);
-  const [savedLists, setSavedLists] = useState([]);
-  const [listName,   setListName]   = useState(`Auction — ${nowShort()}`);
-  const [lots,       setLots]       = useState([]);
-  const [form,       setForm]       = useState({...BLANK});
-  const [sugg,       setSugg]       = useState([]);
-  const [editId,     setEditId]     = useState(null);
-  const [toast,      setToast]      = useState('');
-  const [loaded,     setLoaded]     = useState(false);
-  const [editName,   setEditName]   = useState(false);
-  const [newItem,    setNewItem]    = useState('');
-  const [customUnit, setCustomUnit] = useState('');
+  const [tab,           setTab]           = useState('add');
+  const [db,            setDb]            = useState(DEFAULT_PRODUCE);
+  const [savedLists,    setSavedLists]    = useState([]);
+  const [listName,      setListName]      = useState(`Auction — ${nowShort()}`);
+  const [lots,          setLots]          = useState([]);
+  const [form,          setForm]          = useState({...BLANK});
+  const [formOpen,      setFormOpen]      = useState(true);
+  const [sugg,          setSugg]          = useState([]);
+  const [editId,        setEditId]        = useState(null);
+  const [confirmDelete,        setConfirmDelete]        = useState(null);
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState(null);
+  const [toast,         setToast]         = useState('');
+  const [loaded,        setLoaded]        = useState(false);
+  const [editName,      setEditName]      = useState(false);
+  const [newItem,       setNewItem]       = useState('');
+  const [customUnit,    setCustomUnit]    = useState('');
   const itemRef = useRef(null);
   const nameRef = useRef(null);
 
@@ -111,13 +122,16 @@ export default function ProduceTracker() {
 
     const lot = {
       id: editId || Date.now(),
-      item:  form.item.trim(),
-      unit:  unitVal,
-      grade: form.grade,
-      grower:form.grower.trim(),
-      qty:   form.qty,
-      price: form.price,
-      total: form.total || '0',
+      item:        form.item.trim(),
+      unit:        unitVal,
+      grade:       form.grade,
+      color:       form.color,
+      grower:      form.grower.trim(),
+      qty:         form.qty,
+      price:       form.price,
+      total:       form.total || '0',
+      description: form.description.trim(),
+      is_loaded:   false,
     };
 
     if (editId) {
@@ -129,8 +143,8 @@ export default function ProduceTracker() {
       showToast('Saved ✓');
     }
 
-    // Keep unit/grade/grower for fast repeat entry
-    setForm(f=>({...BLANK, unit:f.unit, grade:f.grade, grower:f.grower}));
+    // Keep unit/grade/color/grower for fast repeat entry
+    setForm(f=>({...BLANK, unit:f.unit, grade:f.grade, color:f.color, grower:f.grower}));
     setCustomUnit('');
     setSugg([]);
     setTimeout(()=>itemRef.current?.focus(), 80);
@@ -138,15 +152,35 @@ export default function ProduceTracker() {
 
   const startEdit = lot => {
     const isCustom = !UNITS.includes(lot.unit);
-    setForm({item:lot.item, unit:isCustom?'__custom__':lot.unit, grade:lot.grade, grower:lot.grower, qty:lot.qty, price:lot.price, total:lot.total});
+    setForm({item:lot.item, unit:isCustom?'__custom__':lot.unit, grade:lot.grade,
+      color:lot.color||'N/A', grower:lot.grower, qty:lot.qty, price:lot.price,
+      total:lot.total, description:lot.description||''});
     if (isCustom) setCustomUnit(lot.unit);
-    setEditId(lot.id);
-    setTab('add');
+    setEditId(lot.id); setTab('add'); setFormOpen(true);
     setTimeout(()=>itemRef.current?.focus(), 80);
   };
 
-  const deleteLot = id => setLots(ls=>ls.filter(l=>l.id!==id));
-  const runTotal  = lots.reduce((s,l)=>s+parseFloat(l.total||0), 0);
+  const deleteLot    = id => { setLots(ls=>ls.filter(l=>l.id!==id)); setConfirmDelete(null); };
+  const toggleLoaded = id => setLots(ls=>ls.map(l=>l.id===id ? {...l,is_loaded:!l.is_loaded} : l));
+  const runTotal     = lots.reduce((s,l)=>s+parseFloat(l.total||0), 0);
+  const loadedCount  = lots.filter(l=>l.is_loaded).length;
+
+  /* ── Report data ── */
+  const reportItems = useMemo(() => {
+    const map = {};
+    lots.forEach(lot => {
+      const key = lot.item.trim().toLowerCase();
+      if (!map[key]) map[key] = {name:lot.item.trim(), totalCost:0, lotCount:0, units:{}};
+      map[key].totalCost += parseFloat(lot.total)||0;
+      map[key].lotCount++;
+      const u = lot.unit||'unit';
+      if (!map[key].units[u]) map[key].units[u] = {qty:0, cost:0, lots:0};
+      map[key].units[u].qty  += parseFloat(lot.qty)||0;
+      map[key].units[u].cost += parseFloat(lot.total)||0;
+      map[key].units[u].lots++;
+    });
+    return Object.values(map).sort((a,b)=>b.totalCost-a.totalCost);
+  }, [lots]);
 
   /* ── List management ── */
   const saveList = async () => {
@@ -246,7 +280,9 @@ export default function ProduceTracker() {
           <span style={{fontSize:20,fontWeight:500,color:'#1D9E75'}}>{fmt(runTotal)}</span>
         </div>
         <span style={{fontSize:12,color:'var(--color-text-secondary)'}}>
-          {lots.length} lot{lots.length!==1?'s':''} · {nowDate()}
+          {lots.length} lot{lots.length!==1?'s':''}
+          {loadedCount>0 && <span style={{color:'#1D9E75',marginLeft:4}}>· {loadedCount} loaded</span>}
+          {' · '}{nowDate()}
         </span>
       </div>
 
@@ -255,12 +291,22 @@ export default function ProduceTracker() {
         <div style={{padding:'12px 16px'}}>
 
           <div style={{background:'var(--color-background-primary)',borderRadius:'var(--border-radius-lg)',
-            border:'0.5px solid var(--color-border-tertiary)',padding:14,marginBottom:14}}>
+            border:'0.5px solid var(--color-border-tertiary)',marginBottom:14,overflow:'hidden'}}>
 
-            <div style={{fontSize:11,fontWeight:500,letterSpacing:'0.06em',
-              color:'var(--color-text-secondary)',marginBottom:10}}>
-              {editId ? '✎  EDIT LOT' : 'NEW LOT'}
+            {/* Form header — always visible */}
+            <div onClick={()=>setFormOpen(o=>!o)}
+              style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                padding:'12px 14px',cursor:'pointer',userSelect:'none'}}>
+              <span style={{fontSize:11,fontWeight:500,letterSpacing:'0.06em',color:'var(--color-text-secondary)'}}>
+                {editId ? '✎  EDIT LOT' : 'NEW LOT'}
+              </span>
+              <span style={{fontSize:13,color:'var(--color-text-tertiary)',lineHeight:1}}>
+                {formOpen ? '▲ hide' : '▼ show'}
+              </span>
             </div>
+
+            {/* Collapsible form body */}
+            {formOpen && <div style={{padding:'0 14px 14px'}}>
 
             {/* ─ Item with autocomplete ─ */}
             <div style={{marginBottom:10,position:'relative'}}>
@@ -334,6 +380,21 @@ export default function ProduceTracker() {
               </div>
             </div>
 
+            {/* ─ Color dropdown ─ */}
+            <div style={{marginBottom:10}}>
+              <div style={lbl}>COLOR</div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {form.color!=='N/A'&&COLOR_DOT[form.color]&&(
+                  <span style={{width:10,height:10,borderRadius:'50%',
+                    background:COLOR_DOT[form.color],flexShrink:0}}/>
+                )}
+                <select value={form.color} onChange={e=>setForm(f=>({...f,color:e.target.value}))}
+                  style={{...inp,cursor:'pointer',width:'auto',flex:1}}>
+                  {COLORS.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
             {/* ─ Qty + Price ─ */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
               <div>
@@ -349,7 +410,7 @@ export default function ProduceTracker() {
             </div>
 
             {/* ─ Total lot cost ─ */}
-            <div style={{marginBottom:12}}>
+            <div style={{marginBottom:10}}>
               <div style={lbl}>TOTAL LOT COST $</div>
               <input value={form.total} onChange={e=>handleTotal(e.target.value)}
                 type="number" inputMode="decimal" placeholder="or enter lot total directly"
@@ -357,10 +418,20 @@ export default function ProduceTracker() {
                   color:'#085041', fontSize:17, fontWeight:500}} />
             </div>
 
+            {/* ─ Notes ─ */}
+            <div style={{marginBottom:12}}>
+              <div style={lbl}>NOTES (optional)</div>
+              <textarea value={form.description}
+                onChange={e=>setForm(f=>({...f,description:e.target.value}))}
+                placeholder="e.g. slight bruising, early pick, good size…"
+                rows={2}
+                style={{...inp,resize:'vertical',lineHeight:1.5,padding:'8px 11px',fontSize:13,fontFamily:'var(--font-sans)'}} />
+            </div>
+
             {/* ─ Buttons ─ */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:8}}>
               <button
-                onClick={()=>{setForm(f=>({...BLANK,unit:f.unit,grade:f.grade,grower:f.grower}));setEditId(null);setSugg([]);}}
+                onClick={()=>{setForm(f=>({...BLANK,unit:f.unit,grade:f.grade,color:f.color,grower:f.grower}));setEditId(null);setSugg([]);}}
                 style={{padding:11,fontSize:14,borderRadius:'var(--border-radius-md)',
                   border:'0.5px solid var(--color-border-secondary)',
                   background:'var(--color-background-secondary)',
@@ -373,7 +444,8 @@ export default function ProduceTracker() {
                 {editId ? 'Update Lot' : 'Save + Next ↵'}
               </button>
             </div>
-          </div>
+          </div>}{/* end collapsible body */}
+          </div>{/* end form card */}
 
           {/* ─ Lots list ─ */}
           {lots.length > 0 ? (
@@ -385,40 +457,88 @@ export default function ProduceTracker() {
 
               {[...lots].reverse().map(lot => {
                 const gs = GS[lot.grade] || GS['No. 1'];
+                const dot = COLOR_DOT[lot.color];
                 return (
-                  <div key={lot.id} style={{background:'var(--color-background-primary)',
+                  <div key={lot.id} style={{background: lot.is_loaded ? '#E1F5EE' : 'var(--color-background-primary)',
                     borderRadius:'var(--border-radius-lg)',
-                    border:'0.5px solid var(--color-border-tertiary)',
+                    border: lot.is_loaded ? '0.5px solid #5DCAA5' : '0.5px solid var(--color-border-tertiary)',
                     padding:'10px 14px',marginBottom:8}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                      <span style={{fontSize:15,fontWeight:500,color:'var(--color-text-primary)'}}>{lot.item}</span>
-                      <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,
-                        background:gs.bg,color:gs.color,fontWeight:500,flexShrink:0,marginLeft:8}}>
-                        {lot.grade}
-                      </span>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        {dot && <span style={{width:10,height:10,borderRadius:'50%',background:dot,flexShrink:0}}/>}
+                        <span style={{fontSize:15,fontWeight:500,
+                          color: lot.is_loaded ? '#085041' : 'var(--color-text-primary)',
+                          textDecoration: lot.is_loaded ? 'line-through' : 'none',
+                          opacity: lot.is_loaded ? 0.75 : 1}}>
+                          {lot.item}
+                        </span>
+                      </div>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,
+                          background:gs.bg,color:gs.color,fontWeight:500,flexShrink:0}}>
+                          {lot.grade}
+                        </span>
+                        <button onClick={()=>toggleLoaded(lot.id)}
+                          style={{width:30,height:30,borderRadius:'50%',flexShrink:0,cursor:'pointer',
+                            border: lot.is_loaded ? 'none' : '1.5px solid var(--color-border-secondary)',
+                            background: lot.is_loaded ? '#1D9E75' : 'transparent',
+                            color: lot.is_loaded ? '#fff' : 'var(--color-text-tertiary)',
+                            fontSize:15,display:'flex',alignItems:'center',justifyContent:'center',
+                            fontWeight:600,fontFamily:'var(--font-sans)'}}>
+                          {lot.is_loaded ? '✓' : '○'}
+                        </button>
+                      </div>
                     </div>
-                    <div style={{fontSize:12,color:'var(--color-text-secondary)',marginBottom:6}}>
+                    <div style={{fontSize:12,color:'var(--color-text-secondary)',marginBottom:lot.description?4:6}}>
                       <b style={{color:'var(--color-text-primary)',fontWeight:500}}>{lot.qty||'—'}</b> × {lot.unit}
                       {lot.price ? <span style={{marginLeft:8}}>{fmt(lot.price)}/unit</span> : ''}
                     </div>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
-                      paddingTop:6,borderTop:'0.5px solid var(--color-border-tertiary)'}}>
-                      <div style={{display:'flex',gap:10,alignItems:'center'}}>
-                        {lot.grower && (
-                          <span style={{fontSize:11,background:'var(--color-background-secondary)',
-                            color:'var(--color-text-secondary)',padding:'2px 8px',borderRadius:20}}>
-                            GR {lot.grower}
-                          </span>
-                        )}
-                        <button onClick={()=>startEdit(lot)}
-                          style={{fontSize:12,color:'#185FA5',background:'none',border:'none',
-                            cursor:'pointer',padding:0,fontFamily:'var(--font-sans)'}}>Edit</button>
-                        <button onClick={()=>deleteLot(lot.id)}
-                          style={{fontSize:12,color:'#A32D2D',background:'none',border:'none',
-                            cursor:'pointer',padding:0,fontFamily:'var(--font-sans)'}}>Remove</button>
+                    {lot.description && (
+                      <div style={{fontSize:12,color:'var(--color-text-tertiary)',fontStyle:'italic',
+                        marginBottom:6,lineHeight:1.4}}>
+                        {lot.description}
                       </div>
-                      <span style={{fontSize:16,fontWeight:500,color:'var(--color-text-primary)'}}>{fmt(lot.total)}</span>
-                    </div>
+                    )}
+                    {confirmDelete===lot.id ? (
+                      <div style={{paddingTop:8,borderTop:'0.5px solid var(--color-border-tertiary)',
+                        display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                        <span style={{fontSize:12,color:'var(--color-text-secondary)'}}>Remove this lot?</span>
+                        <div style={{display:'flex',gap:8}}>
+                          <button onClick={()=>setConfirmDelete(null)}
+                            style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--border-radius-md)',
+                              border:'0.5px solid var(--color-border-secondary)',
+                              background:'var(--color-background-secondary)',
+                              color:'var(--color-text-secondary)',cursor:'pointer',fontFamily:'var(--font-sans)'}}>
+                            Cancel
+                          </button>
+                          <button onClick={()=>deleteLot(lot.id)}
+                            style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--border-radius-md)',
+                              border:'none',background:'#A32D2D',color:'#fff',
+                              cursor:'pointer',fontWeight:500,fontFamily:'var(--font-sans)'}}>
+                            Yes, remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                        paddingTop:6,borderTop:'0.5px solid var(--color-border-tertiary)'}}>
+                        <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                          {lot.grower && (
+                            <span style={{fontSize:11,background:'var(--color-background-secondary)',
+                              color:'var(--color-text-secondary)',padding:'2px 8px',borderRadius:20}}>
+                              GR {lot.grower}
+                            </span>
+                          )}
+                          <button onClick={()=>startEdit(lot)}
+                            style={{fontSize:12,color:'#185FA5',background:'none',border:'none',
+                              cursor:'pointer',padding:0,fontFamily:'var(--font-sans)'}}>Edit</button>
+                          <button onClick={()=>setConfirmDelete(lot.id)}
+                            style={{fontSize:12,color:'#A32D2D',background:'none',border:'none',
+                              cursor:'pointer',padding:0,fontFamily:'var(--font-sans)'}}>Remove</button>
+                        </div>
+                        <span style={{fontSize:16,fontWeight:500,color:'var(--color-text-primary)'}}>{fmt(lot.total)}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -479,16 +599,38 @@ export default function ProduceTracker() {
                 <span style={{fontSize:16,fontWeight:500,color:'var(--color-text-primary)'}}>{fmt(list.total)}</span>
               </div>
               <div style={{display:'flex',gap:14,marginTop:8,paddingTop:8,borderTop:'0.5px solid var(--color-border-tertiary)'}}>
-                <button onClick={()=>loadList(list)}
-                  style={{fontSize:13,color:'#185FA5',background:'none',border:'none',
-                    cursor:'pointer',fontFamily:'var(--font-sans)',padding:0}}>
-                  Load
-                </button>
-                <button onClick={()=>deleteList(list.id)}
-                  style={{fontSize:13,color:'#A32D2D',background:'none',border:'none',
-                    cursor:'pointer',fontFamily:'var(--font-sans)',padding:0}}>
-                  Delete
-                </button>
+                {confirmDeleteSession===list.id ? (
+                  <>
+                    <span style={{fontSize:12,color:'var(--color-text-secondary)',alignSelf:'center'}}>Delete this list?</span>
+                    <button onClick={()=>setConfirmDeleteSession(null)}
+                      style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--border-radius-md)',
+                        border:'0.5px solid var(--color-border-secondary)',
+                        background:'var(--color-background-secondary)',
+                        color:'var(--color-text-secondary)',cursor:'pointer',
+                        fontFamily:'var(--font-sans)',marginLeft:'auto'}}>
+                      Cancel
+                    </button>
+                    <button onClick={()=>{deleteList(list.id);setConfirmDeleteSession(null);}}
+                      style={{fontSize:12,padding:'5px 12px',borderRadius:'var(--border-radius-md)',
+                        border:'none',background:'#A32D2D',color:'#fff',
+                        cursor:'pointer',fontWeight:500,fontFamily:'var(--font-sans)'}}>
+                      Yes, delete
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={()=>loadList(list)}
+                      style={{fontSize:13,color:'#185FA5',background:'none',border:'none',
+                        cursor:'pointer',fontFamily:'var(--font-sans)',padding:0}}>
+                      Load
+                    </button>
+                    <button onClick={()=>setConfirmDeleteSession(list.id)}
+                      style={{fontSize:13,color:'#A32D2D',background:'none',border:'none',
+                        cursor:'pointer',fontFamily:'var(--font-sans)',padding:0}}>
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -567,28 +709,100 @@ export default function ProduceTracker() {
         </div>
       )}
 
-      {/* ── Bottom nav ── */}
+      {/* ════════════════════ TAB: REPORTS */}
+      {tab==='reports' && (
+        <div style={{padding:'12px 16px'}}>
+          <div style={{fontSize:14,fontWeight:500,color:'var(--color-text-primary)',marginBottom:4}}>Purchase Report</div>
+          <div style={{fontSize:12,color:'var(--color-text-secondary)',marginBottom:14}}>
+            {listName} · {lots.length} lots · {fmt(runTotal)}
+          </div>
+
+          {lots.length===0 ? (
+            <div style={{textAlign:'center',padding:'40px 20px',color:'var(--color-text-tertiary)',fontSize:14}}>
+              Add some lots to see the report
+            </div>
+          ) : (
+            <>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
+                {[
+                  {label:'Total Paid', value:fmt(runTotal)},
+                  {label:'Lots',       value:lots.length},
+                  {label:'Products',   value:reportItems.length},
+                ].map(s=>(
+                  <div key={s.label} style={{background:'var(--color-background-secondary)',
+                    borderRadius:'var(--border-radius-md)',padding:'10px 8px',textAlign:'center'}}>
+                    <div style={{fontSize:10,color:'var(--color-text-tertiary)',marginBottom:4,letterSpacing:'0.04em'}}>
+                      {s.label.toUpperCase()}
+                    </div>
+                    <div style={{fontSize:17,fontWeight:500,color:'var(--color-text-primary)'}}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {reportItems.map(item=>(
+                <div key={item.name} style={{background:'var(--color-background-primary)',
+                  borderRadius:'var(--border-radius-lg)',
+                  border:'0.5px solid var(--color-border-tertiary)',marginBottom:8,overflow:'hidden'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                    padding:'10px 14px',borderBottom:'0.5px solid var(--color-border-tertiary)'}}>
+                    <span style={{fontSize:15,fontWeight:500,color:'var(--color-text-primary)'}}>{item.name}</span>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:15,fontWeight:500,color:'var(--color-text-primary)'}}>{fmt(item.totalCost)}</div>
+                      <div style={{fontSize:11,color:'var(--color-text-tertiary)'}}>{item.lotCount} lot{item.lotCount!==1?'s':''}</div>
+                    </div>
+                  </div>
+                  {Object.entries(item.units).map(([unit,data])=>(
+                    <div key={unit} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                      padding:'8px 14px',borderBottom:'0.5px solid var(--color-border-tertiary)'}}>
+                      <div>
+                        <span style={{fontSize:13,fontWeight:500,color:'var(--color-text-primary)'}}>
+                          {Number.isInteger(data.qty)?data.qty:parseFloat(data.qty.toFixed(1))}
+                        </span>
+                        <span style={{fontSize:12,color:'var(--color-text-secondary)',marginLeft:4}}>× {unit}</span>
+                        {data.lots>1&&<span style={{fontSize:11,color:'var(--color-text-tertiary)',marginLeft:8}}>({data.lots} lots)</span>}
+                      </div>
+                      <span style={{fontSize:13,color:'var(--color-text-secondary)'}}>{fmt(data.cost)}</span>
+                    </div>
+                  ))}
+                  <div style={{padding:'6px 14px',background:'var(--color-background-secondary)'}}>
+                    <div style={{height:4,borderRadius:2,background:'var(--color-background-tertiary)',overflow:'hidden'}}>
+                      <div style={{height:'100%',borderRadius:2,background:'#1D9E75',
+                        width:(item.totalCost/runTotal*100).toFixed(1)+'%'}}/>
+                    </div>
+                    <div style={{fontSize:10,color:'var(--color-text-tertiary)',marginTop:3}}>
+                      {(item.totalCost/runTotal*100).toFixed(1)}% of total spend
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Bottom nav (5 tabs) ── */}
       <div style={{position:'fixed',bottom:0,left:0,right:0,
         background:'var(--color-background-primary)',
         borderTop:'0.5px solid var(--color-border-tertiary)',
         display:'flex',padding:'8px 0 10px'}}>
         {[
-          {id:'add',    icon:'＋', label:'Add Lot'},
-          {id:'lists',  icon:'☰',  label:'My Lists'},
-          {id:'export', icon:'⎙',  label:'Print'},
-          {id:'db',     icon:'⊞',  label:'Items DB'},
+          {id:'add',     icon:'＋', label:'Add Lot' },
+          {id:'lists',   icon:'☰',  label:'My Lists'},
+          {id:'reports', icon:'≡',  label:'Reports' },
+          {id:'export',  icon:'⎙',  label:'Print'   },
+          {id:'db',      icon:'⊞',  label:'Items'   },
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
             style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,
               background:'none',border:'none',cursor:'pointer',
               padding:'4px 0',fontFamily:'var(--font-sans)'}}>
-            <span style={{fontSize:22,lineHeight:1,
+            <span style={{fontSize:20,lineHeight:1,
               color:tab===t.id?'#1D9E75':'var(--color-text-tertiary)'}}>
               {t.icon}
             </span>
-            <span style={{fontSize:10,
+            <span style={{fontSize:9,
               color:tab===t.id?'#1D9E75':'var(--color-text-tertiary)',
-              fontWeight:tab===t.id?500:400}}>
+              fontWeight:tab===t.id?600:400}}>
               {t.label}
             </span>
             {tab===t.id && <div style={{width:4,height:4,borderRadius:'50%',background:'#1D9E75'}}/>}

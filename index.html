@@ -78,8 +78,16 @@ const dateStr  = () => new Date().toLocaleDateString('en-US',{month:'short',day:
 const shortStr = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
 const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', size:'N/A', color:'N/A', grower:'', row_no:'', qty:'', price:'', total:'', description:'', is_loaded:false, is_bin_lot:false };
 
-const getSid   = () => { const m = location.hash.match(/#s=([a-f0-9-]{36})/); return m ? m[1] : null; };
-const setSid   = id => history.replaceState(null, '', '#s=' + id);
+const SID_KEY  = 'pat_last_sid';
+const getSid   = () => {
+  var m = location.hash.match(/#s=([a-f0-9-]{36})/);
+  if (m) return m[1];
+  try { return localStorage.getItem(SID_KEY); } catch(e) { return null; }
+};
+const setSid   = function(id) {
+  history.replaceState(null, '', '#s=' + id);
+  try { localStorage.setItem(SID_KEY, id); } catch(e) {}
+};
 const shareUrl = id => location.href.split('#')[0] + '#s=' + id;
 
 function App() {
@@ -95,6 +103,7 @@ function App() {
   const [formOpen,  setFO]     = useState(true);
   const [reportView,setRV]     = useState('product');
   const [sugg,      setSugg]   = useState([]);
+  const [unitSugg,  setUSugg]  = useState([]);
   const [editId,    setEid]    = useState(null);
   const [delLot,    setDelLot] = useState(null);
   const [delSess,   setDelSess]= useState(null);
@@ -106,6 +115,7 @@ function App() {
   const [newRow,    setNR]     = useState('');
   const [custUnit,  setCU]     = useState('');
   const itemRef = useRef(null);
+  const unitRef = useRef(null);
   const nameRef = useRef(null);
   const chanRef = useRef(null);
 
@@ -114,44 +124,16 @@ function App() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  const setSidBoth = id => { _setSid(id); setSid(id); };
-
-  useEffect(() => {
-    var init = async function() {
-      var r1 = await sb.from('produce_db').select('name').order('name');
-      if (r1.data) setPdb(r1.data.map(function(x){ return x.name; }));
-
-      var ru = await sb.from('units_db').select('name').order('name');
-      if (ru.data && ru.data.length > 0) setUnits(ru.data.map(function(x){ return x.name; }));
-
-      var rr = await sb.from('rows_db').select('name').order('id');
-      if (rr.data && rr.data.length > 0) setRows(rr.data.map(function(x){ return x.name; }));
-
-      var id = getSid();
-      if (id) {
-        var r2 = await sb.from('auction_sessions').select('*').eq('id', id).single();
-        if (r2.data) {
-          _setSid(id); setSname(r2.data.name);
-          var r3 = await sb.from('lots').select('*').eq('session_id', id).order('created_at');
-          if (r3.data) setLots(r3.data);
-        } else {
-          id = await newSess(null, true);
-        }
-      } else {
-        id = await newSess(null, true);
-      }
-      await refreshSess();
-      subscribe(id);
-      document.getElementById('loading').style.display = 'none';
-    };
-    init();
-    return function() { if (chanRef.current) chanRef.current.unsubscribe(); };
-  }, []);
-
-  var newSess = async function(name, skipNotify) {
+  // Defined before useEffect so init() can call them safely
+  var makeSession = async function(name) {
     var n = name || ('Auction \u2014 ' + shortStr());
     var r = await sb.from('auction_sessions').insert({ name: n }).select().single();
-    if (r.data) { _setSid(r.data.id); setSname(r.data.name); setSid(r.data.id); return r.data.id; }
+    if (r.data) {
+      _setSid(r.data.id);
+      setSname(r.data.name);
+      setSid(r.data.id); // updates hash + localStorage
+      return r.data.id;
+    }
     return null;
   };
 
@@ -173,6 +155,44 @@ function App() {
       .subscribe();
   };
 
+  useEffect(() => {
+    var init = async function() {
+      // Load shared lookup tables
+      var r1 = await sb.from('produce_db').select('name').order('name');
+      if (r1.data) setPdb(r1.data.map(function(x){ return x.name; }));
+
+      var ru = await sb.from('units_db').select('name').order('name');
+      if (ru.data && ru.data.length > 0) setUnits(ru.data.map(function(x){ return x.name; }));
+
+      var rr = await sb.from('rows_db').select('name').order('id');
+      if (rr.data && rr.data.length > 0) setRows(rr.data.map(function(x){ return x.name; }));
+
+      // Resolve session: URL hash first, then localStorage, then create new
+      var id = getSid(); // checks hash then localStorage
+      if (id) {
+        var r2 = await sb.from('auction_sessions').select('*').eq('id', id).single();
+        if (r2.data) {
+          _setSid(id);
+          setSname(r2.data.name);
+          setSid(id); // ensure hash + localStorage are both set
+          var r3 = await sb.from('lots').select('*').eq('session_id', id).order('created_at');
+          if (r3.data) setLots(r3.data);
+        } else {
+          // Stored ID no longer exists — make a fresh one
+          id = await makeSession(null);
+        }
+      } else {
+        id = await makeSession(null);
+      }
+
+      await refreshSess();
+      subscribe(id);
+      document.getElementById('loading').style.display = 'none';
+    };
+    init();
+    return function() { if (chanRef.current) chanRef.current.unsubscribe(); };
+  }, []);
+
   var commitName = async function(name) {
     setEN(false); setSname(name);
     if (sid) {
@@ -186,6 +206,12 @@ function App() {
     setSugg(v.length ? pdb.filter(function(p){ return p.toLowerCase().includes(v.toLowerCase()); }).slice(0,8) : []);
   };
   var pickSugg = function(s) { setForm(function(f){ return Object.assign({}, f, {item:s}); }); setSugg([]); };
+
+  var onUnitInput = function(v) {
+    setForm(function(f){ return Object.assign({}, f, {unit:v}); });
+    setUSugg(v.length ? units.filter(function(u){ return u.toLowerCase().includes(v.toLowerCase()); }).slice(0,8) : []);
+  };
+  var pickUnitSugg = function(s) { setForm(function(f){ return Object.assign({}, f, {unit:s}); }); setUSugg([]); };
 
   var onPrice = function(v) {
     var p=parseFloat(v), q=parseFloat(form.qty);
@@ -202,11 +228,17 @@ function App() {
 
   var saveLot = async function() {
     if (!form.item.trim()) { if(itemRef.current) itemRef.current.focus(); return; }
-    var unit = form.unit;
+    var unit = form.unit.trim() || units[0] || '';
+    // Auto-save new produce item
     if (!pdb.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
       var nm = form.item.trim();
       await sb.from('produce_db').insert({ name: nm });
       setPdb(function(d){ return d.concat([nm]).sort(function(a,b){ return a.localeCompare(b); }); });
+    }
+    // Auto-save new unit type
+    if (unit && !units.some(function(u){ return u.toLowerCase()===unit.toLowerCase(); })) {
+      await sb.from('units_db').insert({ name: unit });
+      setUnits(function(d){ return d.concat([unit]).sort(function(a,b){ return a.localeCompare(b); }); });
     }
     var payload = {
       session_id: sid, item: form.item.trim(), unit: unit,
@@ -226,7 +258,7 @@ function App() {
       notify('Saved \u2713');
     }
     setForm(function(f){ return Object.assign({}, BLANK, {unit:f.unit||units[0]||'', grade:f.grade, size:f.size, color:f.color, grower:f.grower, row_no:f.row_no}); });
-    setCU(''); setSugg([]);
+    setCU(''); setSugg([]); setUSugg([]);
     setTimeout(function(){ if(itemRef.current) itemRef.current.focus(); }, 80);
   };
 
@@ -256,14 +288,16 @@ function App() {
   var startNewSession = async function() {
     if (chanRef.current) chanRef.current.unsubscribe();
     setLots([]); setForm({...BLANK}); setEid(null);
-    var id = await newSess(null, false);
+    var id = await makeSession(null);
     subscribe(id); await refreshSess();
     setTab('add'); notify('New session started');
   };
 
   var loadSession = async function(sess) {
     if (chanRef.current) chanRef.current.unsubscribe();
-    _setSid(sess.id); setSname(sess.name); setSid(sess.id);
+    _setSid(sess.id);
+    setSname(sess.name);
+    setSid(sess.id); // updates hash + localStorage
     var r = await sb.from('lots').select('*').eq('session_id', sess.id).order('created_at');
     if (r.data) setLots(r.data);
     subscribe(sess.id); setTab('add'); notify('Session loaded');
@@ -531,12 +565,30 @@ function App() {
 
                 {/* Unit + Grower + Row */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
-                  <div>
+                  <div style={{position:'relative'}}>
                     <label style={S.lbl}>UNIT TYPE</label>
-                    <select value={form.unit} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{unit:e.target.value}); }); }}
-                      style={Object.assign({},S.inp,{cursor:'pointer'})}>
-                      {units.map(function(u){ return <option key={u} value={u}>{u}</option>; })}
-                    </select>
+                    <input ref={unitRef} value={form.unit}
+                      onChange={function(e){ onUnitInput(e.target.value); }}
+                      placeholder="e.g. 25 lb. box..."
+                      style={S.inp} autoComplete="off" />
+                    {unitSugg.length > 0 && (
+                      <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:2,
+                        background:'var(--bg-p)',border:'0.5px solid var(--border-md)',
+                        borderRadius:'var(--r-md)',zIndex:200,overflow:'hidden',
+                        boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                        {unitSugg.map(function(u) {
+                          return (
+                            <div key={u}
+                              onMouseDown={function(){ pickUnitSugg(u); }}
+                              onTouchStart={function(e){ e.preventDefault(); pickUnitSugg(u); }}
+                              style={{padding:'10px 14px',fontSize:14,cursor:'pointer',
+                                borderBottom:'0.5px solid var(--border)',color:'var(--text-p)'}}>
+                              {u}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={S.lbl}>GROWER #</label>
@@ -644,7 +696,7 @@ function App() {
                 {/* Buttons */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:8}}>
                   <button
-                    onClick={function(){ setForm(function(f){ return Object.assign({},BLANK,{unit:f.unit,grade:f.grade,color:f.color,grower:f.grower}); }); setEid(null); setSugg([]); }}
+                    onClick={function(){ setForm(function(f){ return Object.assign({},BLANK,{unit:f.unit,grade:f.grade,color:f.color,grower:f.grower}); }); setEid(null); setSugg([]); setUSugg([]); }}
                     style={{padding:11,fontSize:14,borderRadius:'var(--r-md)',border:'0.5px solid var(--border-md)',
                       background:'var(--bg-s)',color:'var(--text-s)',cursor:'pointer'}}>
                     Clear

@@ -60,9 +60,10 @@ const SB_URL = 'https://lzcymngivtkzcazvuirq.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6Y3ltbmdpdnRremNhenZ1aXJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MDMyNTcsImV4cCI6MjA5MjQ3OTI1N30.Yyz5b3Zc3fnOa4QqlrsrJr_BYPAvmrCiHYmG2n3yv4c';
 const sb = supabase.createClient(SB_URL, SB_KEY);
 
-const UNITS = ['25 lb. box','40 lb. box','50 lb. bag','bu. crate','bunch','flat','half-box',
+const DEFAULT_UNITS = ['25 lb. box','40 lb. box','50 lb. bag','bu. crate','bunch','flat','half-box',
   'lug','peck','pint flat','quart flat','bag','crate','sack','barrel','carton','hamper','wirebound crate'];
 const GRADES = ['No. 1','No. 2','No. 3','Canners'];
+const SIZES  = ['N/A','Small','Medium','Large','X-Large'];
 const COLORS = ['N/A','Green','Yellow','Red','Mixed'];
 const CDOT = { Green:'#1D9E75', Yellow:'#EF9F27', Red:'#E24B4A', Mixed:'#888780' };
 const GS = {
@@ -75,7 +76,7 @@ const GS = {
 const fmt      = v => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const dateStr  = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const shortStr = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
-const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', color:'N/A', grower:'', qty:'', price:'', total:'', description:'', is_loaded:false };
+const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', size:'N/A', color:'N/A', grower:'', row_no:'', qty:'', price:'', total:'', description:'', is_loaded:false, is_bin_lot:false };
 
 const getSid   = () => { const m = location.hash.match(/#s=([a-f0-9-]{36})/); return m ? m[1] : null; };
 const setSid   = id => history.replaceState(null, '', '#s=' + id);
@@ -88,8 +89,11 @@ function App() {
   const [sessions,  setSess]   = useState([]);
   const [lots,      setLots]   = useState([]);
   const [pdb,       setPdb]    = useState([]);
+  const [units,     setUnits]  = useState(DEFAULT_UNITS);
+  const [rows,      setRows]   = useState(['Row 1','Row 2','Row 3','Row 4','Row 5','Row 6']);
   const [form,      setForm]   = useState({...BLANK});
   const [formOpen,  setFO]     = useState(true);
+  const [reportView,setRV]     = useState('product');
   const [sugg,      setSugg]   = useState([]);
   const [editId,    setEid]    = useState(null);
   const [delLot,    setDelLot] = useState(null);
@@ -98,6 +102,8 @@ function App() {
   const [toastErr,  setTE]     = useState(false);
   const [editName,  setEN]     = useState(false);
   const [newProd,   setNP]     = useState('');
+  const [newUnit,   setNU]     = useState('');
+  const [newRow,    setNR]     = useState('');
   const [custUnit,  setCU]     = useState('');
   const itemRef = useRef(null);
   const nameRef = useRef(null);
@@ -114,6 +120,12 @@ function App() {
     var init = async function() {
       var r1 = await sb.from('produce_db').select('name').order('name');
       if (r1.data) setPdb(r1.data.map(function(x){ return x.name; }));
+
+      var ru = await sb.from('units_db').select('name').order('name');
+      if (ru.data && ru.data.length > 0) setUnits(ru.data.map(function(x){ return x.name; }));
+
+      var rr = await sb.from('rows_db').select('name').order('id');
+      if (rr.data && rr.data.length > 0) setRows(rr.data.map(function(x){ return x.name; }));
 
       var id = getSid();
       if (id) {
@@ -190,7 +202,7 @@ function App() {
 
   var saveLot = async function() {
     if (!form.item.trim()) { if(itemRef.current) itemRef.current.focus(); return; }
-    var unit = form.unit === '__custom__' ? (custUnit.trim()||'custom') : form.unit;
+    var unit = form.unit;
     if (!pdb.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
       var nm = form.item.trim();
       await sb.from('produce_db').insert({ name: nm });
@@ -198,9 +210,9 @@ function App() {
     }
     var payload = {
       session_id: sid, item: form.item.trim(), unit: unit,
-      grade: form.grade, color: form.color, grower: form.grower.trim(),
-      qty: form.qty, price: form.price, total: form.total||'0',
-      description: form.description.trim(), is_loaded: false
+      grade: form.grade, size: form.size, color: form.color, grower: form.grower.trim(),
+      row_no: form.row_no, qty: form.qty, price: form.price, total: form.total||'0',
+      description: form.description.trim(), is_loaded: false, is_bin_lot: form.is_bin_lot
     };
     if (editId) {
       var r1 = await sb.from('lots').update(payload).eq('id', editId).select().single();
@@ -213,17 +225,16 @@ function App() {
       setLots(function(ls){ return ls.some(function(l){ return l.id===r2.data.id; }) ? ls : ls.concat([r2.data]); });
       notify('Saved \u2713');
     }
-    setForm(function(f){ return Object.assign({}, BLANK, {unit:f.unit, grade:f.grade, color:f.color, grower:f.grower}); });
+    setForm(function(f){ return Object.assign({}, BLANK, {unit:f.unit||units[0]||'', grade:f.grade, size:f.size, color:f.color, grower:f.grower, row_no:f.row_no}); });
     setCU(''); setSugg([]);
     setTimeout(function(){ if(itemRef.current) itemRef.current.focus(); }, 80);
   };
 
   var startEdit = function(lot) {
-    var isC = !UNITS.includes(lot.unit);
-    setForm({ item:lot.item, unit:isC?'__custom__':lot.unit, grade:lot.grade,
-      color:lot.color||'N/A', grower:lot.grower||'', qty:lot.qty||'',
-      price:lot.price||'', total:lot.total||'', description:lot.description||'', is_loaded:false });
-    if (isC) setCU(lot.unit);
+    setForm({ item:lot.item, unit:lot.unit||units[0]||'', grade:lot.grade, size:lot.size||'N/A',
+      color:lot.color||'N/A', grower:lot.grower||'', row_no:lot.row_no||'',
+      qty:lot.qty||'', price:lot.price||'', total:lot.total||'',
+      description:lot.description||'', is_loaded:false, is_bin_lot:lot.is_bin_lot||false });
     setEid(lot.id); setTab('add'); setFO(true);
     setTimeout(function(){ if(itemRef.current) itemRef.current.focus(); }, 80);
   };
@@ -290,6 +301,35 @@ function App() {
     setPdb(function(d){ return d.filter(function(p){ return p!==item; }); });
   };
 
+  var addUnit = async function() {
+    var v = newUnit.trim();
+    if (!v || units.some(function(u){ return u.toLowerCase()===v.toLowerCase(); })) { setNU(''); return; }
+    await sb.from('units_db').insert({ name: v });
+    setUnits(function(d){ return d.concat([v]).sort(function(a,b){ return a.localeCompare(b); }); });
+    setNU(''); notify('Unit added!');
+  };
+
+  var delUnit = async function(item) {
+    await sb.from('units_db').delete().eq('name', item);
+    setUnits(function(d){ return d.filter(function(u){ return u!==item; }); });
+    // If current form uses deleted unit, reset to first available
+    setForm(function(f){ return f.unit === item ? Object.assign({},f,{unit: units.filter(function(u){ return u!==item; })[0]||''}) : f; });
+  };
+
+  var addRow = async function() {
+    var v = newRow.trim();
+    if (!v || rows.some(function(r){ return r.toLowerCase()===v.toLowerCase(); })) { setNR(''); return; }
+    await sb.from('rows_db').insert({ name: v });
+    setRows(function(d){ return d.concat([v]); });
+    setNR(''); notify('Row added!');
+  };
+
+  var delRow = async function(item) {
+    await sb.from('rows_db').delete().eq('name', item);
+    setRows(function(d){ return d.filter(function(r){ return r!==item; }); });
+    setForm(function(f){ return f.row_no === item ? Object.assign({},f,{row_no:''}) : f; });
+  };
+
   var runTotal    = lots.reduce(function(s,l){ return s + (parseFloat(l.total)||0); }, 0);
   var loadedCount = lots.filter(function(l){ return l.is_loaded; }).length;
 
@@ -309,13 +349,35 @@ function App() {
     return Object.values(map).sort(function(a,b){ return b.cost - a.cost; });
   }, [lots]);
 
+  var reportUnits = useMemo(function() {
+    var map = {};
+    lots.forEach(function(lot) {
+      var u = lot.unit || 'unit';
+      if (!map[u]) map[u] = { unit:u, totalQty:0, totalCost:0, lotCount:0, binCount:0, items:{} };
+      map[u].totalQty  += parseFloat(lot.qty)||0;
+      map[u].totalCost += parseFloat(lot.total)||0;
+      map[u].lotCount  += 1;
+      if (lot.is_bin_lot) map[u].binCount += 1;
+      var item = lot.item.trim();
+      if (!map[u].items[item]) map[u].items[item] = { qty:0, lots:0 };
+      map[u].items[item].qty  += parseFloat(lot.qty)||0;
+      map[u].items[item].lots += 1;
+    });
+    return Object.values(map).sort(function(a,b){ return b.lotCount - a.lotCount; });
+  }, [lots]);
+
+  var binCount = lots.filter(function(l){ return l.is_bin_lot; }).length;
+
   var exportText = [
     sname, dateStr(), '='.repeat(44),
     ...lots.map(function(l,i) {
       return String(i+1).padStart(2,'0') + '  ' + l.item + '\n' +
         '    Grade: ' + l.grade +
+        (l.size && l.size!=='N/A' ? '  |  Size: '+l.size : '') +
         (l.color && l.color!=='N/A' ? '  |  Color: '+l.color : '') +
+        (l.is_bin_lot ? '  |  BIN LOT' : '') +
         '  |  Grower: ' + (l.grower||'\u2014') +
+        (l.row_no ? '  |  '+l.row_no : '') +
         '  |  Qty: ' + (l.qty||'\u2014') + ' x ' + l.unit + '\n' +
         '    Lot total: ' + fmt(l.total) +
         (l.description ? '\n    Notes: ' + l.description : '');
@@ -441,14 +503,39 @@ function App() {
                   )}
                 </div>
 
-                {/* Unit + Grower */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+                {/* Bin lot toggle */}
+                <div style={{marginBottom:10}}>
+                  <button onClick={function(){ setForm(function(f){ return Object.assign({},f,{is_bin_lot:!f.is_bin_lot}); }); }}
+                    style={{display:'flex',alignItems:'center',gap:10,width:'100%',
+                      padding:'10px 12px',borderRadius:'var(--r-md)',cursor:'pointer',
+                      border: form.is_bin_lot ? '1.5px solid #EF9F27' : '0.5px solid var(--border)',
+                      background: form.is_bin_lot ? '#FAEEDA' : 'var(--bg-s)',
+                      textAlign:'left'}}>
+                    <div style={{width:22,height:22,borderRadius:6,flexShrink:0,
+                      border: form.is_bin_lot ? 'none' : '1.5px solid var(--border-md)',
+                      background: form.is_bin_lot ? '#EF9F27' : 'transparent',
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      fontSize:14,color:'#fff',fontWeight:700}}>
+                      {form.is_bin_lot ? '\u2713' : ''}
+                    </div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:500,color: form.is_bin_lot ? '#633806' : 'var(--text-p)'}}>
+                        Bin Lot
+                      </div>
+                      <div style={{fontSize:11,color: form.is_bin_lot ? '#854F0B' : 'var(--text-t)'}}>
+                        Qty and price are per item inside the bin
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Unit + Grower + Row */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
                   <div>
                     <label style={S.lbl}>UNIT TYPE</label>
                     <select value={form.unit} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{unit:e.target.value}); }); }}
                       style={Object.assign({},S.inp,{cursor:'pointer'})}>
-                      {UNITS.map(function(u){ return <option key={u} value={u}>{u}</option>; })}
-                      <option value="__custom__">Custom...</option>
+                      {units.map(function(u){ return <option key={u} value={u}>{u}</option>; })}
                     </select>
                   </div>
                   <div>
@@ -456,16 +543,15 @@ function App() {
                     <input value={form.grower} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{grower:e.target.value}); }); }}
                       placeholder="e.g. 4471" style={S.inp} />
                   </div>
-                </div>
-
-                {/* Custom unit */}
-                {form.unit === '__custom__' && (
-                  <div style={{marginBottom:10}}>
-                    <label style={S.lbl}>CUSTOM UNIT</label>
-                    <input value={custUnit} onChange={function(e){ setCU(e.target.value); }}
-                      placeholder="e.g. wooden crate" style={S.inp} />
+                  <div>
+                    <label style={S.lbl}>ROW NO.</label>
+                    <select value={form.row_no} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{row_no:e.target.value}); }); }}
+                      style={Object.assign({},S.inp,{cursor:'pointer'})}>
+                      <option value="">— none —</option>
+                      {rows.map(function(r){ return <option key={r} value={r}>{r}</option>; })}
+                    </select>
                   </div>
-                )}
+                </div>
 
                 {/* Grade */}
                 <div style={{marginBottom:10}}>
@@ -481,6 +567,26 @@ function App() {
                             background: on ? gs.bg : 'var(--bg-s)',
                             color: on ? gs.fg : 'var(--text-s)'}}>
                           {g}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Size */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>SIZE</label>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5}}>
+                    {SIZES.map(function(sz) {
+                      var on = form.size === sz;
+                      return (
+                        <button key={sz} onClick={function(){ setForm(function(f){ return Object.assign({},f,{size:sz}); }); }}
+                          style={{padding:'9px 2px',fontSize:11,fontWeight:500,
+                            borderRadius:'var(--r-md)',cursor:'pointer',transition:'all .1s',
+                            border: on ? '1.5px solid var(--green-b)' : '0.5px solid var(--border)',
+                            background: on ? 'var(--green-l)' : 'var(--bg-s)',
+                            color: on ? 'var(--green-d)' : 'var(--text-s)'}}>
+                          {sz}
                         </button>
                       );
                     })}
@@ -588,6 +694,18 @@ function App() {
                           background:gs.bg,color:gs.fg,fontWeight:500,flexShrink:0}}>
                           {lot.grade}
                         </span>
+                        {lot.size && lot.size !== 'N/A' && (
+                          <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,
+                            background:'var(--green-l)',color:'var(--green-d)',fontWeight:500,flexShrink:0}}>
+                            {lot.size}
+                          </span>
+                        )}
+                        {lot.is_bin_lot && (
+                          <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,
+                            background:'#FAEEDA',color:'#633806',fontWeight:500,flexShrink:0}}>
+                            Bin
+                          </span>
+                        )}
                         <button onClick={function(){ toggleLoaded(lot.id); }}
                           title={lot.is_loaded ? 'Mark unloaded' : 'Mark loaded'}
                           style={{width:30,height:30,borderRadius:'50%',flexShrink:0,cursor:'pointer',
@@ -640,6 +758,12 @@ function App() {
                             <span style={{fontSize:11,background:'var(--bg-s)',color:'var(--text-s)',
                               padding:'2px 8px',borderRadius:20}}>
                               GR {lot.grower}
+                            </span>
+                          ) : null}
+                          {lot.row_no ? (
+                            <span style={{fontSize:11,background:'var(--bg-s)',color:'var(--text-s)',
+                              padding:'2px 8px',borderRadius:20}}>
+                              {lot.row_no}
                             </span>
                           ) : null}
                           <button className="np" onClick={function(){ startEdit(lot); }}
@@ -762,6 +886,8 @@ function App() {
       {/* ── TAB: REPORTS ── */}
       {tab === 'reports' && (
         <div style={{padding:'12px 16px'}}>
+
+          {/* Header */}
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
             <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)'}}>Purchase Report</div>
             <button onClick={function(){ setTab('add'); }}
@@ -770,29 +896,58 @@ function App() {
               + Add Lots
             </button>
           </div>
-          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:14}}>
+          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
             {sname} &middot; {lots.length} lots &middot; {fmt(runTotal)}
           </div>
+
           {lots.length === 0 ? (
             <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-t)',fontSize:14}}>
               Add some lots to see the report
             </div>
           ) : (
             <div>
-              {/* Summary stats */}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}}>
-                {[{lbl:'Total Paid',val:fmt(runTotal)},{lbl:'Lots',val:lots.length},{lbl:'Products',val:reportItems.length}].map(function(s){
+
+              {/* Summary stats — always visible */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:14}}>
+                {[
+                  {lbl:'Paid',    val:fmt(runTotal)},
+                  {lbl:'Lots',    val:lots.length},
+                  {lbl:'Products',val:reportItems.length},
+                  {lbl:'Bins',    val:binCount},
+                ].map(function(s){
                   return (
-                    <div key={s.lbl} style={{background:'var(--bg-t)',borderRadius:'var(--r-md)',padding:'10px 8px',textAlign:'center'}}>
-                      <div style={{fontSize:10,color:'var(--text-t)',marginBottom:4,letterSpacing:'.04em'}}>{s.lbl.toUpperCase()}</div>
-                      <div style={{fontSize:17,fontWeight:500,color:'var(--text-p)'}}>{s.val}</div>
+                    <div key={s.lbl} style={{background:'var(--bg-t)',borderRadius:'var(--r-md)',
+                      padding:'10px 6px',textAlign:'center'}}>
+                      <div style={{fontSize:10,color:'var(--text-t)',marginBottom:3,letterSpacing:'.04em'}}>
+                        {s.lbl.toUpperCase()}
+                      </div>
+                      <div style={{fontSize:16,fontWeight:500,color: s.lbl==='Bins'&&binCount>0 ? '#633806' : 'var(--text-p)'}}>
+                        {s.val}
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Per-product cards */}
-              {reportItems.map(function(item) {
+              {/* View toggle */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:0,
+                border:'0.5px solid var(--border)',borderRadius:'var(--r-md)',overflow:'hidden',marginBottom:14}}>
+                {[{id:'product',lbl:'By Product'},{id:'unit',lbl:'By Unit'},{id:'bins',lbl:'Bin Lots'}].map(function(v){
+                  var on = reportView === v.id;
+                  return (
+                    <button key={v.id} onClick={function(){ setRV(v.id); }}
+                      style={{padding:'9px 4px',fontSize:12,fontWeight: on?600:400,
+                        border:'none',borderRight:'0.5px solid var(--border)',
+                        background: on ? 'var(--green)' : 'var(--bg-s)',
+                        color: on ? '#fff' : 'var(--text-s)',cursor:'pointer'}}>
+                      {v.lbl}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── VIEW: BY PRODUCT ── */}
+              {reportView === 'product' && reportItems.map(function(item) {
                 return (
                   <div key={item.name} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
                     border:'0.5px solid var(--border)',marginBottom:8,overflow:'hidden'}}>
@@ -806,12 +961,12 @@ function App() {
                     </div>
                     {Object.entries(item.units).map(function(entry) {
                       var unit = entry[0]; var data = entry[1];
-                      var qtyDisplay = Number.isInteger(data.qty) ? data.qty : parseFloat(data.qty.toFixed(1));
+                      var qd = Number.isInteger(data.qty) ? data.qty : parseFloat(data.qty.toFixed(1));
                       return (
                         <div key={unit} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
                           padding:'8px 14px',borderBottom:'0.5px solid var(--border)'}}>
                           <div>
-                            <span style={{fontSize:13,fontWeight:500,color:'var(--text-p)'}}>{qtyDisplay}</span>
+                            <span style={{fontSize:13,fontWeight:500,color:'var(--text-p)'}}>{qd}</span>
                             <span style={{fontSize:12,color:'var(--text-s)',marginLeft:4}}>&times; {unit}</span>
                             {data.lots > 1 && <span style={{fontSize:11,color:'var(--text-t)',marginLeft:8}}>({data.lots} lots)</span>}
                           </div>
@@ -825,12 +980,104 @@ function App() {
                           width:(item.cost/runTotal*100).toFixed(1)+'%'}} />
                       </div>
                       <div style={{fontSize:10,color:'var(--text-t)',marginTop:3}}>
-                        {(item.cost/runTotal*100).toFixed(1)}% of total spend
+                        {(item.cost/runTotal*100).toFixed(1)}% of spend
                       </div>
                     </div>
                   </div>
                 );
               })}
+
+              {/* ── VIEW: BY UNIT ── */}
+              {reportView === 'unit' && reportUnits.map(function(row) {
+                var qd = Number.isInteger(row.totalQty) ? row.totalQty : parseFloat(row.totalQty.toFixed(1));
+                return (
+                  <div key={row.unit} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
+                    border:'0.5px solid var(--border)',marginBottom:8,overflow:'hidden'}}>
+                    {/* Unit header */}
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                      padding:'10px 14px',borderBottom:'0.5px solid var(--border)'}}>
+                      <div>
+                        <span style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{row.unit}</span>
+                        {row.binCount > 0 && (
+                          <span style={{fontSize:11,padding:'2px 8px',borderRadius:20,marginLeft:8,
+                            background:'#FAEEDA',color:'#633806',fontWeight:500}}>
+                            {row.binCount} bin{row.binCount!==1?'s':''}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{textAlign:'right'}}>
+                        <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>
+                          {qd} total
+                        </div>
+                        <div style={{fontSize:11,color:'var(--text-t)'}}>
+                          {row.lotCount} lot{row.lotCount!==1?'s':''} &middot; {fmt(row.totalCost)}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Items using this unit */}
+                    {Object.entries(row.items).map(function(entry) {
+                      var itemName = entry[0]; var data = entry[1];
+                      var iqd = Number.isInteger(data.qty) ? data.qty : parseFloat(data.qty.toFixed(1));
+                      return (
+                        <div key={itemName} style={{display:'flex',justifyContent:'space-between',
+                          alignItems:'center',padding:'7px 14px',borderBottom:'0.5px solid var(--border)'}}>
+                          <span style={{fontSize:13,color:'var(--text-p)'}}>{itemName}</span>
+                          <div style={{textAlign:'right'}}>
+                            <span style={{fontSize:13,fontWeight:500,color:'var(--text-p)'}}>{iqd}</span>
+                            {data.lots > 1 && <span style={{fontSize:11,color:'var(--text-t)',marginLeft:6}}>({data.lots} lots)</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+
+              {/* ── VIEW: BIN LOTS ── */}
+              {reportView === 'bins' && (
+                <div>
+                  {binCount === 0 ? (
+                    <div style={{textAlign:'center',padding:'30px 20px',color:'var(--text-t)',fontSize:14}}>
+                      No bin lots in this session
+                    </div>
+                  ) : (
+                    lots.filter(function(l){ return l.is_bin_lot; }).map(function(lot) {
+                      var gs = GS[lot.grade] || GS['No. 1'];
+                      return (
+                        <div key={lot.id} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
+                          border:'0.5px solid #EF9F27',padding:'10px 14px',marginBottom:8}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                            <span style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{lot.item}</span>
+                            <span style={{fontSize:11,padding:'3px 10px',borderRadius:20,
+                              background:'#FAEEDA',color:'#633806',fontWeight:500}}>
+                              Bin
+                            </span>
+                          </div>
+                          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:6}}>
+                            <span style={{fontWeight:500,color:'var(--text-p)'}}>{lot.qty||'\u2014'}</span> items
+                            &nbsp;&middot;&nbsp;{lot.unit}
+                            &nbsp;&middot;&nbsp;
+                            <span style={{padding:'2px 8px',borderRadius:20,background:gs.bg,color:gs.fg,fontWeight:500}}>
+                              {lot.grade}
+                            </span>
+                            {lot.size && lot.size!=='N/A' && <span style={{marginLeft:6,color:'var(--text-t)'}}>{lot.size}</span>}
+                          </div>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                            paddingTop:6,borderTop:'0.5px solid var(--border)'}}>
+                            <span style={{fontSize:12,color:'var(--text-t)'}}>
+                              {lot.price ? fmt(lot.price)+'/item' : ''}
+                              {lot.grower ? <span style={{marginLeft:8}}>GR {lot.grower}</span> : null}
+                              {lot.row_no ? <span style={{marginLeft:8}}>{lot.row_no}</span> : null}
+                            </span>
+                            <span style={{fontSize:15,fontWeight:500,color:'var(--text-p)'}}>{fmt(lot.total)}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
             </div>
           )}
         </div>
@@ -871,22 +1118,24 @@ function App() {
       {/* ── TAB: ITEMS DB ── */}
       {tab === 'db' && (
         <div style={{padding:'12px 16px'}}>
-          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Produce Database</div>
+
+          {/* Produce Items */}
+          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Produce Items</div>
           <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
             {pdb.length} items &middot; Shared across sessions &middot; Auto-saves new items
           </div>
-          <div style={{display:'flex',gap:8,marginBottom:14}}>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
             <input value={newProd} onChange={function(e){ setNP(e.target.value); }}
               onKeyDown={function(e){ if(e.key==='Enter') addProd(); }}
-              placeholder="Add item manually..."
+              placeholder="Add item..."
               style={Object.assign({},S.inp,{flex:1,width:'auto'})} />
             <button onClick={addProd}
-              style={{padding:'9px 18px',fontSize:14,fontWeight:500,borderRadius:'var(--r-md)',
+              style={{padding:'9px 16px',fontSize:14,fontWeight:500,borderRadius:'var(--r-md)',
                 border:'none',background:'var(--green)',color:'#fff',cursor:'pointer',flexShrink:0}}>
               Add
             </button>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5,marginBottom:24}}>
             {pdb.map(function(item) {
               return (
                 <div key={item} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
@@ -902,6 +1151,79 @@ function App() {
               );
             })}
           </div>
+
+          {/* Divider */}
+          <div style={{borderTop:'0.5px solid var(--border)',marginBottom:20}} />
+
+          {/* Units */}
+          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Unit Types</div>
+          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
+            {units.length} units &middot; Shared &middot; Changes appear in the unit dropdown immediately
+          </div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <input value={newUnit} onChange={function(e){ setNU(e.target.value); }}
+              onKeyDown={function(e){ if(e.key==='Enter') addUnit(); }}
+              placeholder="e.g. 30 lb. flat..."
+              style={Object.assign({},S.inp,{flex:1,width:'auto'})} />
+            <button onClick={addUnit}
+              style={{padding:'9px 16px',fontSize:14,fontWeight:500,borderRadius:'var(--r-md)',
+                border:'none',background:'var(--green)',color:'#fff',cursor:'pointer',flexShrink:0}}>
+              Add
+            </button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            {units.map(function(item) {
+              return (
+                <div key={item} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                  background:'var(--bg-p)',border:'0.5px solid var(--border)',
+                  borderRadius:'var(--r-md)',padding:'7px 10px'}}>
+                  <span style={{fontSize:13,color:'var(--text-p)'}}>{item}</span>
+                  <button onClick={function(){ delUnit(item); }}
+                    style={{fontSize:18,lineHeight:1,color:'var(--text-t)',background:'none',
+                      border:'none',cursor:'pointer',padding:'0 0 0 6px'}}>
+                    &times;
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Divider */}
+          <div style={{borderTop:'0.5px solid var(--border)',marginBottom:20,marginTop:24}} />
+
+          {/* Rows */}
+          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Auction Rows</div>
+          <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
+            {rows.length} rows &middot; Appears in the Row No. dropdown on each lot
+          </div>
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <input value={newRow} onChange={function(e){ setNR(e.target.value); }}
+              onKeyDown={function(e){ if(e.key==='Enter') addRow(); }}
+              placeholder="e.g. Row 7..."
+              style={Object.assign({},S.inp,{flex:1,width:'auto'})} />
+            <button onClick={addRow}
+              style={{padding:'9px 16px',fontSize:14,fontWeight:500,borderRadius:'var(--r-md)',
+                border:'none',background:'var(--green)',color:'#fff',cursor:'pointer',flexShrink:0}}>
+              Add
+            </button>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            {rows.map(function(item) {
+              return (
+                <div key={item} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                  background:'var(--bg-p)',border:'0.5px solid var(--border)',
+                  borderRadius:'var(--r-md)',padding:'7px 10px'}}>
+                  <span style={{fontSize:13,color:'var(--text-p)'}}>{item}</span>
+                  <button onClick={function(){ delRow(item); }}
+                    style={{fontSize:18,lineHeight:1,color:'var(--text-t)',background:'none',
+                      border:'none',cursor:'pointer',padding:'0 0 0 6px'}}>
+                    &times;
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
         </div>
       )}
 

@@ -458,6 +458,68 @@ function App() {
     if (navigator.clipboard) navigator.clipboard.writeText(exportText).then(function(){ notify('Copied!'); });
   };
 
+  var openPrintReport = function() {
+    var GS_PRINT = {
+      'No. 1':   { bg:'#E1F5EE', color:'#085041', border:'#5DCAA5' },
+      'No. 2':   { bg:'#E6F1FB', color:'#0C447C', border:'#85B7EB' },
+      'No. 3':   { bg:'#EEEDFE', color:'#26215C', border:'#AFA9EC' },
+      'Canners': { bg:'#FAEEDA', color:'#633806', border:'#EF9F27' },
+    };
+    var rowsHtml = lots.map(function(lot, i) {
+      var gs = GS_PRINT[lot.grade] || GS_PRINT['No. 1'];
+      var badges = [
+        '<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;background:'+gs.bg+';color:'+gs.color+';border:1px solid '+gs.border+';">'+lot.grade+'</span>',
+        (lot.size && lot.size!=='N/A') ? '<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;background:#E1F5EE;color:#085041;">'+lot.size+'</span>' : '',
+        (lot.color && lot.color!=='N/A') ? '<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;background:#f5f5f3;color:#444;">'+lot.color+'</span>' : '',
+        lot.is_bin_lot ? '<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:600;background:#FAEEDA;color:#633806;">Bin Lot</span>' : '',
+      ].filter(Boolean).join(' ');
+      var meta = [
+        lot.grower ? 'GR '+lot.grower : '',
+        lot.row_no || '',
+        (lot.qty||'') + ' × ' + lot.unit,
+        lot.price ? fmt(lot.price)+'/unit' : '',
+      ].filter(Boolean).join(' · ');
+      var thumb = lot.photo_url
+        ? '<img src="'+lot.photo_url+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:0.5px solid #ddd;display:block;flex-shrink:0;" crossorigin="anonymous">'
+        : '<div style="width:60px;height:60px;border-radius:6px;border:0.5px solid #eee;background:#f5f5f3;flex-shrink:0;"></div>';
+      return '<div style="display:flex;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid #eee;">'
+        + '<div style="font-size:11px;font-weight:700;color:#999;min-width:22px;padding-top:3px;flex-shrink:0;">'+(i+1)+'</div>'
+        + thumb
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="font-size:16px;font-weight:600;color:#1a1a18;margin-bottom:4px;">'+lot.item+'</div>'
+        + '<div style="margin-bottom:3px;">'+badges+'</div>'
+        + '<div style="font-size:12px;color:#666;">'+meta+'</div>'
+        + (lot.description ? '<div style="font-size:11px;color:#999;font-style:italic;margin-top:3px;">'+lot.description+'</div>' : '')
+        + '</div>'
+        + '<div style="font-size:15px;font-weight:600;color:#1D9E75;flex-shrink:0;padding-top:2px;">'+fmt(lot.total)+'</div>'
+        + '</div>';
+    }).join('');
+    var html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+      + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>'+sname+'</title>'
+      + '<style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}'
+      + 'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff;color:#1a1a18;padding:32px 40px;max-width:760px;margin:0 auto}'
+      + '@media print{body{padding:16px 20px}@page{margin:0.5in}}'
+      + '</style></head><body>'
+      + '<div style="border-bottom:2.5px solid #1D9E75;padding-bottom:16px;margin-bottom:22px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">'
+      + '<div><div style="font-size:24px;font-weight:700;color:#1a1a18;">'+sname+'</div>'
+      + '<div style="font-size:13px;color:#888;margin-top:4px;">'+dateStr()+' &nbsp;&middot;&nbsp; '+lots.length+' lot'+(lots.length!==1?'s':'')+'</div></div>'
+      + '<div style="text-align:right;flex-shrink:0;">'
+      + '<div style="font-size:22px;font-weight:700;color:#1D9E75;">'+fmt(runTotal)+'</div>'
+      + '<div style="font-size:11px;color:#999;margin-top:2px;">Total paid</div>'
+      + '</div></div></div>'
+      + rowsHtml
+      + '<div style="margin-top:20px;padding:12px 0;border-top:2px solid #1D9E75;display:flex;justify-content:space-between;align-items:center;">'
+      + '<span style="font-size:14px;color:#555;">'+lots.length+' lot'+(lots.length!==1?'s':'')+' purchased</span>'
+      + '<span style="font-size:20px;font-weight:700;color:#1D9E75;">'+fmt(runTotal)+'</span>'
+      + '</div>'
+      + '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>'
+      + '</body></html>';
+    var w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); }
+  };
+
   // shared styles
   var S = {
     inp: { background:'var(--bg-s)', border:'0.5px solid var(--border)', borderRadius:'var(--r-md)',
@@ -838,7 +900,7 @@ function App() {
                 SAVED LOTS ({lots.length})
               </div>
 
-              {lots.slice().reverse().map(function(lot) {
+              {lots.slice().map(function(lot) {
                 var gs  = GS[lot.grade] || GS['No. 1'];
                 var dot = CDOT[lot.color];
                 return (
@@ -1280,10 +1342,10 @@ function App() {
                     border:'0.5px solid var(--green)',background:'transparent',color:'var(--green)',cursor:'pointer'}}>
                   Copy text
                 </button>
-                <button onClick={function(){ window.print(); }}
+                <button onClick={openPrintReport}
                   style={{padding:11,fontSize:13,fontWeight:500,borderRadius:'var(--r-md)',
                     border:'none',background:'var(--green)',color:'#fff',cursor:'pointer'}}>
-                  Print
+                  🖨 Print Report
                 </button>
               </div>
             </div>

@@ -30,6 +30,7 @@
     #loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:14px;color:#999;font-size:14px}
     .spin{width:28px;height:28px;border-radius:50%;border:2.5px solid #ddd;border-top-color:#1D9E75;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes livepulse{0%,100%{opacity:1}50%{opacity:0.3}}
     input,select,button,textarea{font-family:inherit}
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
@@ -334,7 +335,7 @@ function App() {
     setLots([]); setForm({...BLANK}); setEid(null);
     var id = await makeSession(null);
     subscribe(id); await refreshSess();
-    setTab('add');
+    setTab('add'); setFO(false);
   };
 
   var loadSession = async function(sess) {
@@ -344,7 +345,7 @@ function App() {
     setSid(sess.id);
     var r = await sb.from('lots').select('*').eq('session_id', sess.id).order('created_at');
     if (r.data) setLots(r.data);
-    subscribe(sess.id); setTab('add');
+    subscribe(sess.id); setTab('add'); setFO(false);
   };
 
   var doDelSess = async function(id) {
@@ -478,7 +479,7 @@ function App() {
 
         <button onClick={async function(){
             var id = await makeSession(null);
-            subscribe(id); await refreshSess(); setTab('add');
+            subscribe(id); await refreshSess(); setTab('add'); setFO(false);
           }}
           style={{width:'100%',padding:'14px',fontSize:15,fontWeight:600,
             borderRadius:'var(--r-lg)',border:'none',background:'var(--green)',
@@ -490,14 +491,27 @@ function App() {
           <div>
             <div style={{fontSize:11,fontWeight:500,letterSpacing:'0.06em',
               color:'var(--text-t)',marginBottom:10}}>PREVIOUS SESSIONS</div>
-            {sessions.map(function(sess) {
+            {sessions.map(function(sess, idx) {
               var lotCount = sess.lots?.[0]?.count ?? 0;
+              var isNewest = idx === 0;
               return (
                 <div key={sess.id} style={{background:'var(--bg-p)',borderRadius:'var(--r-lg)',
-                  border:'0.5px solid var(--border)',padding:'12px 14px',marginBottom:8,
+                  border: isNewest ? '1.5px solid var(--green)' : '0.5px solid var(--border)',
+                  padding:'12px 14px',marginBottom:8,
                   display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                   <div>
-                    <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)',marginBottom:2}}>{sess.name}</div>
+                    <div style={{fontSize:15,fontWeight:500,color:'var(--text-p)',marginBottom:4,display:'flex',alignItems:'center',gap:8}}>
+                      {sess.name}
+                      {isNewest && (
+                        <span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,fontWeight:600,
+                          color:'#C0392B',background:'#FDECEA',border:'1px solid #F5B7B1',
+                          borderRadius:20,padding:'2px 8px',letterSpacing:'0.03em'}}>
+                          <span style={{width:7,height:7,borderRadius:'50%',background:'#E74C3C',
+                            display:'inline-block',animation:'livepulse 1.4s ease-in-out infinite'}} />
+                          LIVE
+                        </span>
+                      )}
+                    </div>
                     <div style={{fontSize:12,color:'var(--text-t)'}}>
                       {new Date(sess.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
                       {lotCount > 0 && <span style={{marginLeft:8}}>&middot; {lotCount} lot{lotCount!==1?'s':''}</span>}
@@ -507,7 +521,7 @@ function App() {
                     style={{padding:'8px 18px',fontSize:13,fontWeight:500,
                       borderRadius:'var(--r-md)',border:'none',
                       background:'var(--green)',color:'#fff',cursor:'pointer',flexShrink:0}}>
-                    Open
+                    {isNewest ? 'Join →' : 'Open'}
                   </button>
                 </div>
               );

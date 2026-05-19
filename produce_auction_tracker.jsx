@@ -41,7 +41,7 @@ const GS = {
 const fmt = v => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const nowDate  = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const nowShort = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
-const BLANK = { item:'', unit:'25 lb. box', grade:'No. 1', color:'N/A', grower:'', qty:'', price:'', total:'', description:'', is_loaded:false };
+const BLANK = { item:'', unit:'', grade:'No. 1', color:'N/A', grower:'', qty:'', price:'', total:'', description:'', is_loaded:false };
 
 export default function ProduceTracker() {
   const [tab,           setTab]           = useState('add');
@@ -59,7 +59,8 @@ export default function ProduceTracker() {
   const [loaded,        setLoaded]        = useState(false);
   const [editName,      setEditName]      = useState(false);
   const [newItem,       setNewItem]       = useState('');
-  const [customUnit,    setCustomUnit]    = useState('');
+  const [unitSugg,      setUnitSugg]      = useState([]);
+  const [unitDb,        setUnitDb]        = useState(UNITS);
   const itemRef = useRef(null);
   const nameRef = useRef(null);
 
@@ -67,6 +68,7 @@ export default function ProduceTracker() {
   useEffect(() => {
     (async () => {
       try { const r=await window.storage.get('pdb');   if(r) setDb(JSON.parse(r.value)); } catch {}
+      try { const r=await window.storage.get('udb');   if(r) setUnitDb(JSON.parse(r.value)); } catch {}
       try { const r=await window.storage.get('alst');  if(r) setSavedLists(JSON.parse(r.value)); } catch {}
       try {
         const r=await window.storage.get('cur');
@@ -94,6 +96,16 @@ export default function ProduceTracker() {
 
   const pickSugg = s => { setForm(f=>({...f,item:s})); setSugg([]); };
 
+  /* ── Unit autocomplete ── */
+  const handleUnitInput = val => {
+    setForm(f=>({...f, unit:val}));
+    setUnitSugg(val.length >= 1
+      ? unitDb.filter(u=>u.toLowerCase().includes(val.toLowerCase())).slice(0,8)
+      : []);
+  };
+  const handleUnitFocus = () => { if (!form.unit) setUnitSugg(unitDb.slice(0,8)); };
+  const pickUnitSugg = s => { setForm(f=>({...f,unit:s})); setUnitSugg([]); };
+
   /* ── Calculated fields ── */
   const handlePrice = val => {
     const p=parseFloat(val), q=parseFloat(form.qty);
@@ -111,7 +123,14 @@ export default function ProduceTracker() {
   /* ── Save lot ── */
   const saveLot = () => {
     if (!form.item.trim()) { itemRef.current?.focus(); return; }
-    const unitVal = form.unit === '__custom__' ? customUnit.trim() || 'custom' : form.unit;
+    const unitVal = form.unit.trim() || 'unit';
+
+    // Auto-add new unit to unit DB
+    if (unitVal !== 'unit' && !unitDb.some(u=>u.toLowerCase()===unitVal.toLowerCase())) {
+      const nub = [...unitDb, unitVal].sort((a,b)=>a.localeCompare(b));
+      setUnitDb(nub);
+      window.storage.set('udb', JSON.stringify(nub)).catch(()=>{});
+    }
 
     // Auto-add new item to DB
     if (!db.some(p=>p.toLowerCase()===form.item.trim().toLowerCase())) {
@@ -145,17 +164,15 @@ export default function ProduceTracker() {
 
     // Keep unit/grade/color/grower for fast repeat entry
     setForm(f=>({...BLANK, unit:f.unit, grade:f.grade, color:f.color, grower:f.grower}));
-    setCustomUnit('');
     setSugg([]);
+    setUnitSugg([]);
     setTimeout(()=>itemRef.current?.focus(), 80);
   };
 
   const startEdit = lot => {
-    const isCustom = !UNITS.includes(lot.unit);
-    setForm({item:lot.item, unit:isCustom?'__custom__':lot.unit, grade:lot.grade,
+    setForm({item:lot.item, unit:lot.unit, grade:lot.grade,
       color:lot.color||'N/A', grower:lot.grower, qty:lot.qty, price:lot.price,
       total:lot.total, description:lot.description||''});
-    if (isCustom) setCustomUnit(lot.unit);
     setEditId(lot.id); setTab('add'); setFormOpen(true);
     setTimeout(()=>itemRef.current?.focus(), 80);
   };
@@ -338,11 +355,36 @@ export default function ProduceTracker() {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
               <div>
                 <div style={lbl}>UNIT TYPE</div>
-                <select value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))}
-                  style={{...inp,paddingRight:6,cursor:'pointer'}}>
-                  {UNITS.map(u=><option key={u} value={u}>{u}</option>)}
-                  <option value="__custom__">Custom…</option>
-                </select>
+                <div style={{position:'relative'}}>
+                  <input
+                    value={form.unit}
+                    onChange={e=>handleUnitInput(e.target.value)}
+                    onFocus={handleUnitFocus}
+                    onBlur={()=>setTimeout(()=>setUnitSugg([]),150)}
+                    placeholder="e.g. 25 lb. box"
+                    style={inp}
+                    autoComplete="off"
+                    autoCorrect="off"
+                  />
+                  {unitSugg.length > 0 && (
+                    <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:2,
+                      background:'var(--color-background-primary)',
+                      border:'0.5px solid var(--color-border-secondary)',
+                      borderRadius:'var(--border-radius-md)',zIndex:100,overflow:'hidden',
+                      boxShadow:'0 4px 12px rgba(0,0,0,0.08)'}}>
+                      {unitSugg.map(s=>(
+                        <div key={s}
+                          onMouseDown={()=>pickUnitSugg(s)}
+                          onTouchStart={e=>{e.preventDefault();pickUnitSugg(s);}}
+                          style={{padding:'11px 14px',fontSize:14,cursor:'pointer',
+                            borderBottom:'0.5px solid var(--color-border-tertiary)',
+                            color:'var(--color-text-primary)'}}>
+                          {s}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <div style={lbl}>GROWER #</div>
@@ -350,15 +392,6 @@ export default function ProduceTracker() {
                   placeholder="e.g. 4471" style={inp} />
               </div>
             </div>
-
-            {/* Custom unit input (shown when Custom selected) */}
-            {form.unit==='__custom__' && (
-              <div style={{marginBottom:10}}>
-                <div style={lbl}>CUSTOM UNIT</div>
-                <input value={customUnit} onChange={e=>setCustomUnit(e.target.value)}
-                  placeholder="e.g. wooden crate" style={inp} />
-              </div>
-            )}
 
             {/* ─ Grade quick-tap ─ */}
             <div style={{marginBottom:10}}>

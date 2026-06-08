@@ -723,11 +723,120 @@ function App() {
                   )}
                 </div>
 
-                {/* Grower # */}
+                {/* Bin lot toggle */}
                 <div style={{marginBottom:10}}>
-                  <label style={S.lbl}>GROWER #</label>
-                  <input value={form.grower} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{grower:e.target.value}); }); }}
-                    placeholder="e.g. 4471" style={S.inp} />
+                  <button onClick={function(){ setForm(function(f){ return Object.assign({},f,{is_bin_lot:!f.is_bin_lot}); }); }}
+                    style={{display:'inline-flex',alignItems:'center',gap:7,
+                      padding:'6px 12px 6px 8px',borderRadius:'var(--r-md)',cursor:'pointer',
+                      border: form.is_bin_lot ? '1.5px solid #EF9F27' : '0.5px solid var(--border)',
+                      background: form.is_bin_lot ? '#FAEEDA' : 'var(--bg-s)'}}>
+                    <div style={{width:18,height:18,borderRadius:5,flexShrink:0,
+                      border: form.is_bin_lot ? 'none' : '1.5px solid var(--border-md)',
+                      background: form.is_bin_lot ? '#EF9F27' : 'transparent',
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      fontSize:12,color:'#fff',fontWeight:700}}>
+                      {form.is_bin_lot ? '\u2713' : ''}
+                    </div>
+                    <span style={{fontSize:13,fontWeight:500,color: form.is_bin_lot ? '#633806' : 'var(--text-p)'}}>
+                      Bin Lot
+                    </span>
+                  </button>
+                </div>
+
+                {/* Unit + Grower + Row */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                  <div style={{position:'relative'}}>
+                    <label style={S.lbl}>UNIT TYPE</label>
+                    <input ref={unitRef} value={form.unit}
+                      onChange={function(e){ onUnitInput(e.target.value); }}
+                      placeholder="e.g. 25 lb. box..."
+                      style={S.inp} autoComplete="off" />
+                    {unitSugg.length > 0 && (
+                      <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:2,
+                        background:'var(--bg-p)',border:'0.5px solid var(--border-md)',
+                        borderRadius:'var(--r-md)',zIndex:200,overflow:'hidden',
+                        boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                        {unitSugg.map(function(u) {
+                          return (
+                            <div key={u}
+                              onMouseDown={function(){ pickUnitSugg(u); }}
+                              onTouchStart={function(e){ e.preventDefault(); pickUnitSugg(u); }}
+                              style={{padding:'10px 14px',fontSize:14,cursor:'pointer',
+                                borderBottom:'0.5px solid var(--border)',color:'var(--text-p)'}}>
+                              {u}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label style={S.lbl}>GROWER #</label>
+                    <input value={form.grower} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{grower:e.target.value}); }); }}
+                      placeholder="e.g. 4471" style={S.inp} />
+                  </div>
+                  <div>
+                    <label style={S.lbl}>ROW NO.</label>
+                    <select value={form.row_no} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{row_no:e.target.value}); }); }}
+                      style={Object.assign({},S.inp,{cursor:'pointer'})}>
+                      <option value="">— none —</option>
+                      {rows.map(function(r){ return <option key={r} value={r}>{r}</option>; })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Grade */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>GRADE</label>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5}}>
+                    {GRADES.map(function(g) {
+                      var gs = GS[g]; var on = form.grade === g;
+                      return (
+                        <button key={g} onClick={function(){ setForm(function(f){ return Object.assign({},f,{grade:g}); }); }}
+                          style={{padding:'9px 4px',fontSize:12,fontWeight:500,
+                            borderRadius:'var(--r-md)',cursor:'pointer',transition:'all .1s',
+                            border: on ? '1.5px solid '+gs.br : '0.5px solid var(--border)',
+                            background: on ? gs.bg : 'var(--bg-s)',
+                            color: on ? gs.fg : 'var(--text-s)'}}>
+                          {g}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Size */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>SIZE</label>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:5}}>
+                    {SIZES.map(function(sz) {
+                      var on = form.size === sz;
+                      return (
+                        <button key={sz} onClick={function(){ setForm(function(f){ return Object.assign({},f,{size:sz}); }); }}
+                          style={{padding:'9px 2px',fontSize:11,fontWeight:500,
+                            borderRadius:'var(--r-md)',cursor:'pointer',transition:'all .1s',
+                            border: on ? '1.5px solid var(--green-b)' : '0.5px solid var(--border)',
+                            background: on ? 'var(--green-l)' : 'var(--bg-s)',
+                            color: on ? 'var(--green-d)' : 'var(--text-s)'}}>
+                          {sz}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Color */}
+                <div style={{marginBottom:10}}>
+                  <label style={S.lbl}>COLOR</label>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    {form.color !== 'N/A' && CDOT[form.color] && (
+                      <span style={{width:10,height:10,borderRadius:'50%',background:CDOT[form.color],flexShrink:0}} />
+                    )}
+                    <select value={form.color} onChange={function(e){ setForm(function(f){ return Object.assign({},f,{color:e.target.value}); }); }}
+                      style={Object.assign({},S.inp,{cursor:'pointer',width:'auto',flex:1})}>
+                      {COLORS.map(function(c){ return <option key={c} value={c}>{c}</option>; })}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Qty + Price */}

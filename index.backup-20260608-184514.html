@@ -689,6 +689,40 @@ function App() {
                     </div>
                   )}
                 </div>
+
+                {/* Photo */}
+                <div style={{marginBottom:10}}>
+                  <input ref={photoRef} type="file" accept="image/*" capture="environment"
+                    onChange={handlePhotoSelect} style={{display:'none'}} />
+                  {photoPreview ? (
+                    <div style={{position:'relative',display:'inline-block'}}>
+                      <img src={photoPreview} alt="lot photo"
+                        style={{width:90,height:90,objectFit:'cover',borderRadius:'var(--r-md)',
+                          border:'0.5px solid var(--border)',display:'block'}} />
+                      {photoLoading && (
+                        <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)',
+                          borderRadius:'var(--r-md)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <div className="spin" style={{borderTopColor:'#fff'}} />
+                        </div>
+                      )}
+                      <button onClick={clearPhoto}
+                        style={{position:'absolute',top:-6,right:-6,width:20,height:20,borderRadius:'50%',
+                          background:'#A32D2D',color:'#fff',border:'none',cursor:'pointer',
+                          fontSize:13,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',
+                          fontWeight:700}}>
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={function(){ if(photoRef.current) photoRef.current.click(); }}
+                      style={{display:'inline-flex',alignItems:'center',gap:6,padding:'7px 12px',
+                        borderRadius:'var(--r-md)',border:'0.5px solid var(--border)',
+                        background:'var(--bg-s)',color:'var(--text-s)',cursor:'pointer',fontSize:13}}>
+                      <span style={{fontSize:16}}>📷</span> Add Photo
+                    </button>
+                  )}
+                </div>
+
                 {/* Grower # */}
                 <div style={{marginBottom:10}}>
                   <label style={S.lbl}>GROWER #</label>

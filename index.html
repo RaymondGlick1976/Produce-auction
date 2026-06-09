@@ -270,7 +270,7 @@ function App() {
 
   var saveLot = async function() {
     if (!form.item.trim()) { if(itemRef.current) itemRef.current.focus(); return; }
-    var unit = form.unit.trim() || units[0] || '';
+    var unit = form.unit.trim();
     // Auto-save new produce item
     if (!pdb.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
       var nm = form.item.trim();
@@ -291,12 +291,12 @@ function App() {
     };
     if (editId) {
       var r1 = await sb.from('lots').update(payload).eq('id', editId).select().single();
-      if (r1.error) { notify('Save failed', true); return; }
+      if (r1.error) { console.error('Lot update error:', r1.error, 'payload:', payload); notify('Save failed: ' + (r1.error.message || r1.error.code || 'unknown'), true); return; }
       setLots(function(ls){ return ls.map(function(l){ return l.id===editId ? r1.data : l; }); });
       setEid(null); notify('Lot updated');
     } else {
       var r2 = await sb.from('lots').insert(payload).select().single();
-      if (r2.error) { notify('Save failed', true); return; }
+      if (r2.error) { console.error('Lot insert error:', r2.error, 'payload:', payload); notify('Save failed: ' + (r2.error.message || r2.error.code || 'unknown'), true); return; }
       setLots(function(ls){ return ls.some(function(l){ return l.id===r2.data.id; }) ? ls : ls.concat([r2.data]); });
       notify('Saved \u2713');
     }
@@ -445,8 +445,8 @@ function App() {
         (l.is_bin_lot ? '  |  BIN LOT' : '') +
         '  |  Grower: ' + (l.grower||'\u2014') +
         (l.row_no ? '  |  '+l.row_no : '') +
-        '  |  Qty: ' + (l.qty||'\u2014') + ' x ' + l.unit +
-        (l.price ? '  |  ' + fmt(l.price) + '/unit' : '') + '\n' +
+        '  |  Qty: ' + (l.qty||'\u2014') +
+        (l.price ? '  |  ' + fmt(l.price) + ' ea' : '') + '\n' +
         '    Lot total: ' + fmt(l.total) +
         (l.description ? '\n    Notes: ' + l.description : '');
     }),
@@ -476,8 +476,8 @@ function App() {
       var meta = [
         lot.grower ? 'GR '+lot.grower : '',
         lot.row_no || '',
-        (lot.qty||'') + ' × ' + lot.unit,
-        lot.price ? fmt(lot.price)+'/unit' : '',
+        lot.qty ? 'Qty ' + lot.qty : '',
+        lot.price ? fmt(lot.price)+' ea' : '',
       ].filter(Boolean).join(' · ');
       var thumb = lot.photo_url
         ? '<img src="'+lot.photo_url+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:0.5px solid #ddd;display:block;flex-shrink:0;" crossorigin="anonymous">'
@@ -818,8 +818,8 @@ function App() {
 
                     {/* Qty row */}
                     <div style={{fontSize:12,color:'var(--text-s)',marginBottom: lot.description ? 4 : 6}}>
-                      <b style={{color:'var(--text-p)',fontWeight:500}}>{lot.qty||'\u2014'}</b> &times; {lot.unit}
-                      {lot.price ? <span style={{marginLeft:8}}>{fmt(lot.price)}/unit</span> : null}
+                      Qty <b style={{color:'var(--text-p)',fontWeight:500}}>{lot.qty||'\u2014'}</b>
+                      {lot.price ? <span style={{marginLeft:8}}>{fmt(lot.price)} ea</span> : null}
                     </div>
 
                     {/* Notes */}
@@ -1024,9 +1024,9 @@ function App() {
               </div>
 
               {/* View toggle */}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:0,
+              <div style={{display:'grid',gridTemplateColumns:'1fr',gap:0,
                 border:'0.5px solid var(--border)',borderRadius:'var(--r-md)',overflow:'hidden',marginBottom:14}}>
-                {[{id:'product',lbl:'By Product'},{id:'unit',lbl:'By Unit'},{id:'bins',lbl:'Bin Lots'}].map(function(v){
+                {[{id:'product',lbl:'By Product'}].map(function(v){
                   var on = reportView === v.id;
                   return (
                     <button key={v.id} onClick={function(){ setRV(v.id); }}
@@ -1060,10 +1060,10 @@ function App() {
                         <div key={unit} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
                           padding:'8px 14px',borderBottom:'0.5px solid var(--border)'}}>
                           <div>
+                            <span style={{fontSize:12,color:'var(--text-s)'}}>Qty </span>
                             <span style={{fontSize:13,fontWeight:500,color:'var(--text-p)'}}>{qd}</span>
-                            <span style={{fontSize:12,color:'var(--text-s)',marginLeft:4}}>&times; {unit}</span>
                             {data.lots > 1 && <span style={{fontSize:11,color:'var(--text-t)',marginLeft:8}}>({data.lots} lots)</span>}
-                            {data.qty > 0 && <span style={{fontSize:11,color:'var(--text-t)',marginLeft:8}}>{fmt(data.cost/data.qty)}/unit</span>}
+                            {data.qty > 0 && <span style={{fontSize:11,color:'var(--text-t)',marginLeft:8}}>{fmt(data.cost/data.qty)} ea</span>}
                           </div>
                           <span style={{fontSize:13,color:'var(--text-s)'}}>{fmt(data.cost)}</span>
                         </div>

@@ -77,7 +77,7 @@ const GS = {
 const fmt      = v => '$' + (parseFloat(v)||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const dateStr  = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 const shortStr = () => new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
-const BLANK = { item:'', unit:'', grade:'No. 1', size:'N/A', color:'N/A', grower:'', row_no:'', qty:'', price:'', total:'', description:'', is_loaded:false, is_bin_lot:false };
+const BLANK = { item:'', unit:'each', grade:'No. 1', size:'N/A', color:'N/A', grower:'', row_no:'', qty:'', price:'', total:'', description:'', is_loaded:false, is_bin_lot:false };
 
 const SID_KEY  = 'pat_last_sid';
 const getSid   = () => { try { return localStorage.getItem(SID_KEY); } catch(e) { return null; } };
@@ -270,7 +270,7 @@ function App() {
 
   var saveLot = async function() {
     if (!form.item.trim()) { if(itemRef.current) itemRef.current.focus(); return; }
-    var unit = form.unit.trim();
+    var unit = form.unit.trim() || 'each';
     // Auto-save new produce item
     if (!pdb.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
       var nm = form.item.trim();
@@ -300,13 +300,13 @@ function App() {
       setLots(function(ls){ return ls.some(function(l){ return l.id===r2.data.id; }) ? ls : ls.concat([r2.data]); });
       notify('Saved \u2713');
     }
-    setForm(function(f){ return Object.assign({}, BLANK, {unit:f.unit||units[0]||'', grade:f.grade, size:f.size, color:f.color, grower:f.grower, row_no:f.row_no}); });
+    setForm(function(f){ return Object.assign({}, BLANK, {unit:f.unit||'each', grade:f.grade, size:f.size, color:f.color, grower:f.grower, row_no:f.row_no}); });
     setCU(''); setSugg([]); setUSugg([]); clearPhoto();
     setTimeout(function(){ if(itemRef.current) itemRef.current.focus(); }, 80);
   };
 
   var startEdit = function(lot) {
-    setForm({ item:lot.item, unit:lot.unit||units[0]||'', grade:lot.grade, size:lot.size||'N/A',
+    setForm({ item:lot.item, unit:lot.unit||'each', grade:lot.grade, size:lot.size||'N/A',
       color:lot.color||'N/A', grower:lot.grower||'', row_no:lot.row_no||'',
       qty:lot.qty||'', price:lot.price||'', total:lot.total||'',
       description:lot.description||'', is_loaded:false, is_bin_lot:lot.is_bin_lot||false });

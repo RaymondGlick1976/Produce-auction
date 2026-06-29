@@ -121,6 +121,10 @@ function App() {
   const [logQty,      setLogQty]   = useState('');
   const [logPrice,    setLogPrice] = useState('');
   const [delOrder,    setDelOrder] = useState(null);
+  const [impOpen,     setImpOpen]  = useState(false);
+  const [impOrders,   setImpOrders]= useState([]);
+  const [impSel,      setImpSel]   = useState({});
+  const [impBusy,     setImpBusy]  = useState(false);
   const itemRef  = useRef(null);
   const unitRef  = useRef(null);
   const nameRef  = useRef(null);
@@ -476,39 +480,60 @@ function App() {
     }
     setLogFor(null); setLogQty(''); setLogPrice(''); notify('Logged \u2713');
   };
-  var importOrders = async function() {
+  var openImport = async function() {
     if (!sid) { notify('Pick or start a session first', true); return; }
-    var ro = await sb.from('wholesale_orders').select('id').eq('status','new');
-    if (ro.error) { notify('Import failed', true); return; }
-    var orderIds = (ro.data||[]).map(function(o){ return o.id; });
-    if (!orderIds.length) { notify('No new customer orders'); return; }
-    var ri = await sb.from('wholesale_order_items').select('*').in('order_id', orderIds);
-    if (ri.error) { notify('Import failed', true); return; }
+    setImpBusy(true); setImpOpen(true); setImpOrders([]); setImpSel({});
+    var ro = await sb.from('wholesale_orders').select('*').eq('status','new').order('created_at', { ascending: true });
+    if (ro.error) { setImpBusy(false); notify('Could not load orders', true); return; }
+    var list = ro.data || [];
+    var ids = list.map(function(o){ return o.id; });
+    var byOrder = {};
+    if (ids.length) {
+      var ri = await sb.from('wholesale_order_items').select('*').in('order_id', ids);
+      (ri.data||[]).forEach(function(it){ (byOrder[it.order_id]=byOrder[it.order_id]||[]).push(it); });
+    }
+    list.forEach(function(o){ o.items = byOrder[o.id] || []; });
+    var sel = {}; list.forEach(function(o){ sel[o.id] = true; });
+    setImpOrders(list); setImpSel(sel); setImpBusy(false);
+  };
+  var closeImport = function(){ setImpOpen(false); setImpOrders([]); setImpSel({}); };
+  var toggleImpSel = function(id){ setImpSel(function(s){ var n=Object.assign({},s); n[id]=!n[id]; return n; }); };
+  var deleteImpOrder = async function(id){
+    setImpOrders(function(os){ return os.filter(function(o){ return o.id!==id; }); });
+    setImpSel(function(s){ var n=Object.assign({},s); delete n[id]; return n; });
+    await sb.from('wholesale_orders').delete().eq('id', id);
+    notify('Order deleted');
+  };
+  var impSelCount = function(){ return impOrders.filter(function(o){ return impSel[o.id]; }).length; };
+  var importSelected = async function(){
+    var chosen = impOrders.filter(function(o){ return impSel[o.id]; });
+    if (!chosen.length) { notify('Select at least one order', true); return; }
+    setImpBusy(true);
     var agg = {};
-    (ri.data||[]).forEach(function(it){
-      var key = (it.item||'').trim().toLowerCase(); if (!key) return;
-      if (!agg[key]) agg[key] = { item:(it.item||'').trim(), unit:it.unit||'each', qty:0 };
+    chosen.forEach(function(o){ (o.items||[]).forEach(function(it){
+      var key=(it.item||'').trim().toLowerCase(); if(!key) return;
+      if(!agg[key]) agg[key]={ item:(it.item||'').trim(), unit:it.unit||'each', qty:0 };
       agg[key].qty += parseFloat(it.qty)||0;
-    });
+    }); });
     var keys = Object.keys(agg);
-    var existing = {};
-    orders.forEach(function(o){ existing[(o.item||'').trim().toLowerCase()] = o; });
+    var existing = {}; orders.forEach(function(o){ existing[(o.item||'').trim().toLowerCase()]=o; });
     var next = orders.slice();
     for (var k=0;k<keys.length;k++){
-      var a = agg[keys[k]];
-      var ex = existing[keys[k]];
+      var a=agg[keys[k]], ex=existing[keys[k]];
       if (ex) {
-        var nt = (parseFloat(ex.target_qty)||0) + a.qty;
+        var nt=(parseFloat(ex.target_qty)||0)+a.qty;
         await sb.from('auction_orders').update({ target_qty: nt }).eq('id', ex.id);
-        (function(exId,ntv){ next = next.map(function(o){ return o.id===exId ? Object.assign({},o,{target_qty:ntv}) : o; }); })(ex.id, nt);
+        (function(id,v){ next=next.map(function(o){ return o.id===id?Object.assign({},o,{target_qty:v}):o; }); })(ex.id, nt);
       } else {
-        var ins = await sb.from('auction_orders').insert({ session_id: sid, item:a.item, unit:a.unit, target_qty:a.qty }).select().single();
-        if (ins.data) { next = next.concat([ins.data]); existing[keys[k]] = ins.data; }
+        var ins=await sb.from('auction_orders').insert({ session_id: sid, item:a.item, unit:a.unit, target_qty:a.qty }).select().single();
+        if (ins.data) { next=next.concat([ins.data]); existing[keys[k]]=ins.data; }
       }
     }
     setOrders(next);
-    await sb.from('wholesale_orders').update({ status:'imported' }).in('id', orderIds);
-    notify('Imported ' + orderIds.length + ' order' + (orderIds.length!==1?'s':'') + ' \u2713');
+    var chosenIds = chosen.map(function(o){ return o.id; });
+    await sb.from('wholesale_orders').update({ status:'imported' }).in('id', chosenIds);
+    setImpBusy(false); closeImport();
+    notify('Imported ' + chosenIds.length + ' order' + (chosenIds.length!==1?'s':'') + ' ✓');
   };
 
   var orderDoneCount = orders.filter(function(o){ var t=parseFloat(o.target_qty)||0; return t>0 && purchasedFor(o.id)>=t; }).length;
@@ -1475,11 +1500,48 @@ function App() {
           <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>{sname}</div>
 
           {sid && (
-            <button onClick={importOrders}
+            <button onClick={openImport}
               style={{width:'100%',marginBottom:14,padding:'10px 14px',fontSize:13,fontWeight:500,borderRadius:'var(--r-md)',
                 border:'0.5px solid var(--green)',background:'transparent',color:'var(--green)',cursor:'pointer'}}>
               &#10515; Import customer orders
             </button>
+          )}
+
+          {impOpen && (
+            <div style={{border:'0.5px solid var(--border-md)',borderRadius:'var(--r-lg)',background:'var(--bg-p)',padding:'12px 14px',marginBottom:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--text-p)'}}>Customer Orders</span>
+                <button onClick={closeImport} style={{background:'none',border:'none',fontSize:20,color:'var(--text-t)',cursor:'pointer',lineHeight:1}}>&times;</button>
+              </div>
+              {impBusy && impOrders.length===0 ? (
+                <div style={{fontSize:13,color:'var(--text-s)',padding:'12px 0'}}>Loading orders...</div>
+              ) : impOrders.length===0 ? (
+                <div style={{fontSize:13,color:'var(--text-s)',padding:'12px 0'}}>No new customer orders to import.</div>
+              ) : (
+                <div>
+                  {impOrders.map(function(o){
+                    var n=(o.items||[]).length;
+                    var isOn=!!impSel[o.id];
+                    return (
+                      <div key={o.id} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 0',borderBottom:'0.5px solid var(--border)'}}>
+                        <input type="checkbox" checked={isOn} onChange={function(){ toggleImpSel(o.id); }} style={{width:18,height:18,accentColor:'var(--green)',flexShrink:0}} />
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)'}}>{o.business||o.customer_name||'Order'}</div>
+                          <div style={{fontSize:12,color:'var(--text-s)'}}>{o.customer_name?(o.customer_name+' \u00b7 '):''}{n} item{n!==1?'s':''} · {new Date(o.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+                        </div>
+                        <button onClick={function(){ deleteImpOrder(o.id); }} style={{fontSize:12,color:'#A32D2D',background:'none',border:'none',cursor:'pointer',padding:'0 2px',flexShrink:0}}>Delete</button>
+                      </div>
+                    );
+                  })}
+                  <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:12}}>
+                    <button onClick={closeImport} style={{fontSize:13,padding:'8px 14px',borderRadius:'var(--r-md)',border:'0.5px solid var(--border-md)',background:'var(--bg-s)',color:'var(--text-s)',cursor:'pointer'}}>Cancel</button>
+                    <button onClick={importSelected} disabled={impBusy} style={{fontSize:13,fontWeight:500,padding:'8px 16px',borderRadius:'var(--r-md)',border:'none',background:'var(--green)',color:'#fff',cursor:'pointer',opacity:impBusy?0.6:1}}>
+                      {impBusy?'Importing\u2026':('Import selected ('+impSelCount()+')')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           <div style={{background:'var(--bg-p)',border:'0.5px solid var(--border)',borderRadius:'var(--r-lg)',padding:'10px 12px',marginBottom:14}}>

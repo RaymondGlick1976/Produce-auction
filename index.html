@@ -777,6 +777,33 @@ function App() {
                     placeholder="e.g. 4471" style={S.inp} />
                 </div>
 
+                {/* Unit */}
+                <div style={{marginBottom:10,position:'relative'}}>
+                  <label style={S.lbl}>UNIT</label>
+                  <input ref={unitRef} value={form.unit} onChange={function(e){ onUnitInput(e.target.value); }}
+                    onFocus={function(){ setUSugg(units.slice(0,8)); }}
+                    onBlur={function(){ setTimeout(function(){ setUSugg([]); }, 150); }}
+                    placeholder="e.g. 25 lb. box, bunch, each" style={S.inp} autoComplete="off" />
+                  {unitSugg.length > 0 && (
+                    <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:2,
+                      background:'var(--bg-p)',border:'0.5px solid var(--border-md)',
+                      borderRadius:'var(--r-md)',zIndex:100,overflow:'hidden',
+                      boxShadow:'0 4px 16px rgba(0,0,0,.1)'}}>
+                      {unitSugg.map(function(s) {
+                        return (
+                          <div key={s}
+                            onMouseDown={function(){ pickUnitSugg(s); }}
+                            onTouchStart={function(e){ e.preventDefault(); pickUnitSugg(s); }}
+                            style={{padding:'11px 14px',fontSize:14,cursor:'pointer',
+                              borderBottom:'0.5px solid var(--border)',color:'var(--text-p)'}}>
+                            {s}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
                 {/* Qty + Price */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                   <div>

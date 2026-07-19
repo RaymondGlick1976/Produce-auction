@@ -129,6 +129,7 @@ function App() {
   const unitRef  = useRef(null);
   const nameRef  = useRef(null);
   const chanRef  = useRef(null);
+  const prodChanRef = useRef(null);
   const photoRef = useRef(null);
 
   const notify = (msg, err) => {
@@ -221,6 +222,23 @@ function App() {
       .subscribe();
   };
 
+  // PFS Books "products" table is the master produce catalog. Re-fetch names
+  // from it and keep a live realtime subscription so this app mirrors it,
+  // the same way the palmerfarmstand.com/wholesale page reads live from it.
+  var refreshBookProds = async function() {
+    var rbp = await sb.from('products').select('name').order('name');
+    if (rbp.data) setBookProds(rbp.data.map(function(x){ return x.name; }));
+  };
+
+  useEffect(function() {
+    prodChanRef.current = sb.channel('products-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, function() {
+        refreshBookProds();
+      })
+      .subscribe();
+    return function() { if (prodChanRef.current) prodChanRef.current.unsubscribe(); };
+  }, []);
+
   useEffect(() => {
     var init = async function() {
       // Load shared lookup tables
@@ -233,8 +251,7 @@ function App() {
       var rr = await sb.from('rows_db').select('name').order('id');
       if (rr.data && rr.data.length > 0) setRows(rr.data.map(function(x){ return x.name; }));
 
-      var rbp = await sb.from('products').select('name').order('name');
-      if (rbp.data) setBookProds(rbp.data.map(function(x){ return x.name; }));
+      await refreshBookProds();
 
       // Try to resume last session from localStorage
       var id = getSid();
@@ -268,9 +285,24 @@ function App() {
     }
   };
 
+  // Unified produce list: PFS Books "products" (master, live-synced) unioned
+  // with the legacy local produce_db list, deduped case-insensitively.
+  var allItemNames = useMemo(function() {
+    var seen = {}, out = [];
+    pdb.concat(bookProds).forEach(function(n) {
+      if (!n) return;
+      var k = n.toLowerCase();
+      if (!seen[k]) { seen[k] = 1; out.push(n); }
+    });
+    return out.sort(function(a, b) { return a.localeCompare(b); });
+  }, [pdb, bookProds]);
+  var isMasterItem = function(name) {
+    return bookProds.some(function(p) { return p.toLowerCase() === name.toLowerCase(); });
+  };
+
   var onItem = function(v) {
     setForm(function(f){ return Object.assign({}, f, {item:v}); });
-    setSugg(v.length ? pdb.filter(function(p){ return p.toLowerCase().includes(v.toLowerCase()); }).slice(0,8) : []);
+    setSugg(v.length ? allItemNames.filter(function(p){ return p.toLowerCase().includes(v.toLowerCase()); }).slice(0,8) : []);
   };
   var pickSugg = function(s) { setForm(function(f){ return Object.assign({}, f, {item:s}); }); setSugg([]); };
 
@@ -296,11 +328,12 @@ function App() {
   var saveLot = async function() {
     if (!form.item.trim()) { if(itemRef.current) itemRef.current.focus(); return; }
     var unit = form.unit.trim() || 'each';
-    // Auto-save new produce item
-    if (!pdb.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
+    // Auto-save new produce item — goes into PFS Books' products table (the
+    // master catalog), same place Import from Auction and the Products page write to.
+    if (!allItemNames.some(function(p){ return p.toLowerCase()===form.item.trim().toLowerCase(); })) {
       var nm = form.item.trim();
-      await sb.from('produce_db').insert({ name: nm });
-      setPdb(function(d){ return d.concat([nm]).sort(function(a,b){ return a.localeCompare(b); }); });
+      var rNew = await sb.from('products').insert({ name: nm, category: 'Produce', unit: unit }).select().single();
+      if (rNew.data) setBookProds(function(d){ return d.concat([nm]).sort(function(a,b){ return a.localeCompare(b); }); });
     }
     // Auto-save new unit type
     if (unit && !units.some(function(u){ return u.toLowerCase()===unit.toLowerCase(); })) {
@@ -382,13 +415,22 @@ function App() {
 
   var addProd = async function() {
     var v = newProd.trim();
-    if (!v || pdb.some(function(p){ return p.toLowerCase()===v.toLowerCase(); })) { setNP(''); return; }
-    await sb.from('produce_db').insert({ name: v });
-    setPdb(function(d){ return d.concat([v]).sort(function(a,b){ return a.localeCompare(b); }); });
-    setNP(''); notify('Added!');
+    if (!v || allItemNames.some(function(p){ return p.toLowerCase()===v.toLowerCase(); })) { setNP(''); return; }
+    // Adds go straight to PFS Books' products table — that's the master catalog now.
+    var r = await sb.from('products').insert({ name: v, category: 'Produce', unit: 'each' }).select().single();
+    if (r.error) { notify('Could not add: ' + (r.error.message || 'unknown error'), true); return; }
+    setBookProds(function(d){ return d.concat([v]).sort(function(a,b){ return a.localeCompare(b); }); });
+    setNP(''); notify('Added to PFS Books!');
   };
 
   var delProd = async function(item) {
+    // Items that live in PFS Books' products table (the master) can only be
+    // deleted from the Products page there, so a delete here doesn't quietly
+    // remove pricing/category info someone set up in PFS Books.
+    if (isMasterItem(item)) {
+      notify('Managed in PFS Books — delete it from the Products page there.', true);
+      return;
+    }
     await sb.from('produce_db').delete().eq('name', item);
     setPdb(function(d){ return d.filter(function(p){ return p!==item; }); });
   };
@@ -425,12 +467,10 @@ function App() {
   // ── Buy List (order sheet) ──
   var boSuggList = function(v) {
     if (!v) return [];
-    var seen = {}, out = [];
-    var all = pdb.concat(bookProds);
-    for (var i=0;i<all.length;i++){
-      var nm = all[i]; if(!nm) continue;
-      var k = nm.toLowerCase();
-      if (k.indexOf(v.toLowerCase())>=0 && !seen[k]) { seen[k]=1; out.push(nm); if(out.length>=8) break; }
+    var out = [];
+    for (var i=0;i<allItemNames.length;i++){
+      var nm = allItemNames[i];
+      if (nm.toLowerCase().indexOf(v.toLowerCase())>=0) { out.push(nm); if(out.length>=8) break; }
     }
     return out;
   };
@@ -1385,7 +1425,7 @@ function App() {
           {/* Produce Items */}
           <div style={{fontSize:14,fontWeight:500,color:'var(--text-p)',marginBottom:4}}>Produce Items</div>
           <div style={{fontSize:12,color:'var(--text-s)',marginBottom:12}}>
-            {pdb.length} items &middot; Shared across sessions &middot; Auto-saves new items
+            {allItemNames.length} items &middot; synced with PFS Books Products &middot; Auto-saves new items
           </div>
           <div style={{display:'flex',gap:8,marginBottom:12}}>
             <input value={newProd} onChange={function(e){ setNP(e.target.value); }}
@@ -1399,17 +1439,20 @@ function App() {
             </button>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5,marginBottom:24}}>
-            {pdb.map(function(item) {
+            {allItemNames.map(function(item) {
+              var master = isMasterItem(item);
               return (
                 <div key={item} style={{display:'flex',justifyContent:'space-between',alignItems:'center',
                   background:'var(--bg-p)',border:'0.5px solid var(--border)',
                   borderRadius:'var(--r-md)',padding:'7px 10px'}}>
                   <span style={{fontSize:13,color:'var(--text-p)'}}>{item}</span>
-                  <button onClick={function(){ delProd(item); }}
-                    style={{fontSize:18,lineHeight:1,color:'var(--text-t)',background:'none',
-                      border:'none',cursor:'pointer',padding:'0 0 0 6px'}}>
-                    &times;
-                  </button>
+                  {master
+                    ? <span title="Managed in PFS Books" style={{fontSize:12,color:'var(--text-t)',padding:'0 0 0 6px'}}>🔒</span>
+                    : <button onClick={function(){ delProd(item); }}
+                        style={{fontSize:18,lineHeight:1,color:'var(--text-t)',background:'none',
+                          border:'none',cursor:'pointer',padding:'0 0 0 6px'}}>
+                        &times;
+                      </button>}
                 </div>
               );
             })}
